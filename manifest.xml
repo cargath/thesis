@@ -1,0 +1,20 @@
+<package>
+  <description brief="thesis">
+    Perceiving and memorizing packaged goods (in a supermarket environment)
+  </description>
+  
+  <author>Carsten Könemann</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/thesis</url>
+
+  <depend package="roscpp"/>
+  
+  <depend package="sensor_msgs"/>
+  
+  <depend package="tf"/>
+  
+  <depend package="cv_bridge"/>
+  <depend package="opencv2"/>
+  <depend package="image_geometry"/>
+</package>

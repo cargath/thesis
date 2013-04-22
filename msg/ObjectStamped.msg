@@ -1,0 +1,2 @@
+string object_id
+geometry_msgs/PoseStamped pose_stamped
