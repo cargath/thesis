@@ -18,15 +18,30 @@ ObjectRecognizer::~ObjectRecognizer()
   // Default destructor
 }
 
+ObjectRecognizer::ProcessedSample ObjectRecognizer::processSample(const cv::Mat& image, const std::string& id)
+{
+  // Make new struct manually
+  ProcessedSample sample;
+  sample.width  = image.cols;
+  sample.height = image.rows;
+  sample.id     = id;
+  // Detect keypoints
+  feature_detector.detect(image, sample.keypoints);
+  // Compute descriptors
+  descriptor_extractor.compute(image, sample.keypoints, sample.descriptors);
+  //
+  return sample;
+}
+
 void ObjectRecognizer::detectObject(const std::vector<cv::KeyPoint>& keypoints,
                                     const cv::Mat& descriptors,
-                                    ObjectDatabase::SampleObject& object,
-                                    std::vector<Finding>& findings,
-                                    cv::Mat* debug_img)
+                                    const ObjectRecognizer::ProcessedSample& object,
+                                    ObjectRecognizer::Finding& finding,
+                                    cv::Mat* debug_image)
 {
   // Compute matches
   std::vector<cv::DMatch> matches;
-  descriptor_matcher.match(object.desc, descriptors, matches);
+  descriptor_matcher.match(object.descriptors, descriptors, matches);
   // Filter matches by distance
   double min_distance = 100.0,
          max_distance =   0.0;
@@ -64,55 +79,78 @@ void ObjectRecognizer::detectObject(const std::vector<cv::KeyPoint>& keypoints,
     // Compute perspective transform
     std::vector<cv::Point2f> object_corners = std::vector<cv::Point2f>(4),
                              scene_corners  = std::vector<cv::Point2f>(4);
-    object_corners[0] = cvPoint(              0,               0);
-    object_corners[1] = cvPoint(object.img.cols,               0);
-    object_corners[2] = cvPoint(object.img.cols, object.img.rows);
-    object_corners[3] = cvPoint(              0, object.img.rows);
+    object_corners[0] = cvPoint(           0,             0);
+    object_corners[1] = cvPoint(object.width,             0);
+    object_corners[2] = cvPoint(object.width, object.height);
+    object_corners[3] = cvPoint(           0, object.height);
     cv::perspectiveTransform(object_corners, scene_corners, homography);
     // Add object to output
-    findings.push_back(Finding(object.name, scene_corners));
+    finding.id           = object.id;
+    finding.image_points = scene_corners;
     // Create debug image
-    if(debug_img)
+    if(debug_image)
     {
-      line(*debug_img, scene_corners[0], scene_corners[1], RED);
-      line(*debug_img, scene_corners[1], scene_corners[2], RED);
-      line(*debug_img, scene_corners[2], scene_corners[3], RED);
-      line(*debug_img, scene_corners[3], scene_corners[0], RED);
+      line(*debug_image, scene_corners[0], scene_corners[1], RED);
+      line(*debug_image, scene_corners[1], scene_corners[2], RED);
+      line(*debug_image, scene_corners[2], scene_corners[3], RED);
+      line(*debug_image, scene_corners[3], scene_corners[0], RED);
     }
   }
 }
 
-void ObjectRecognizer::detectObjects(const cv::Mat& img,
-                                     ObjectDatabase& database,
-                                     std::vector<Finding>& findings,
-                                     cv::Mat* debug_img)
+void ObjectRecognizer::detectObject(const cv::Mat& image,
+                                    const ObjectRecognizer::ProcessedSample& object,
+                                    ObjectRecognizer::Finding& finding,
+                                    cv::Mat* debug_image)
 {
   // Extract feature points
   std::vector<cv::KeyPoint> keypoints;
-  feature_detector.detect(img, keypoints);
+  feature_detector.detect(image, keypoints);
   // Compute descriptors
   cv::Mat descriptors;
-  descriptor_extractor.compute(img, keypoints, descriptors);
-  // Detect objects
-  for(size_t i = 0; i < database.objects.size(); i++)
-  {
-    detectObject(keypoints, descriptors, database.objects[i], findings, debug_img);
-  }
+  descriptor_extractor.compute(image, keypoints, descriptors);
+  // Detect object
+  detectObject(keypoints, descriptors, object, finding, debug_image);
   // Create debug image
-  if(debug_img)
+  if(debug_image)
   {
-    cv::drawKeypoints(*debug_img, keypoints, *debug_img, BLUE);
+    cv::drawKeypoints(*debug_image, keypoints, *debug_image, BLUE);
   }
 }
 
-void ObjectRecognizer::detectObjectsClustered(const cv::Mat& img,
-                                              ObjectDatabase& database,
-                                              std::vector<Finding>& findings,
-                                              cv::Mat* debug_img)
+void ObjectRecognizer::detectObjects(const cv::Mat& image,
+                                     const std::vector<ObjectRecognizer::ProcessedSample>& objects,
+                                     std::vector<ObjectRecognizer::Finding>& findings,
+                                     cv::Mat* debug_image)
 {
   // Extract feature points
   std::vector<cv::KeyPoint> keypoints;
-  feature_detector.detect(img, keypoints);
+  feature_detector.detect(image, keypoints);
+  // Compute descriptors
+  cv::Mat descriptors;
+  descriptor_extractor.compute(image, keypoints, descriptors);
+  // Detect objects
+  for(size_t i = 0; i < objects.size(); i++)
+  {
+    Finding finding;
+    detectObject(keypoints, descriptors, objects[i], finding, debug_image);
+    findings.push_back(finding);
+  }
+  // Create debug image
+  if(debug_image)
+  {
+    cv::drawKeypoints(*debug_image, keypoints, *debug_image, BLUE);
+  }
+}
+
+void ObjectRecognizer::detectObjectsClustered(const cv::Mat& image,
+                                              const std::vector<ProcessedSample>& objects,
+                                              std::vector<Finding>& findings,
+                                              cv::Mat* debug_image)
+{
+  // Extract feature points
+  std::vector<cv::KeyPoint> keypoints;
+  feature_detector.detect(image, keypoints);
   // Cluster feature points
   std::vector<std::vector<cv::KeyPoint> > keypoints_clustered;
   keypoints_clustered = dbscanner.scan(keypoints, DBSCAN_MIN_POINTS, DBSCAN_MAX_DISTANCE);
@@ -121,7 +159,7 @@ void ObjectRecognizer::detectObjectsClustered(const cv::Mat& img,
   for(size_t i = 0; i < keypoints_clustered.size(); i++)
   {
     cv::Mat next_descriptors;
-    descriptor_extractor.compute(img, keypoints_clustered[i], next_descriptors);
+    descriptor_extractor.compute(image, keypoints_clustered[i], next_descriptors);
     descriptors.push_back(next_descriptors);
   }
   // Match descriptors
@@ -146,14 +184,14 @@ void ObjectRecognizer::detectObjectsClustered(const cv::Mat& img,
   // Locate objects
   // TODO
   // Create debug image
-  if(debug_img)
+  if(debug_image)
   {
     // Feature points
     for(size_t i = 0; i < keypoints_clustered.size(); i++)
     {
       int c = 255/keypoints_clustered.size() * i;
       cv::Scalar color = cv::Scalar(255-c, 0, c);
-      cv::drawKeypoints(*debug_img, keypoints_clustered[i], *debug_img, color);
+      cv::drawKeypoints(*debug_image, keypoints_clustered[i], *debug_image, color);
     }
     // TODO: Matches
     /*for(size_t i = 0; i < matches_clustered.size(); i++)
@@ -164,45 +202,6 @@ void ObjectRecognizer::detectObjectsClustered(const cv::Mat& img,
                   *matches_clustered[i].trainCluster,
                   GREEN);
     }*/
-  }
-}
-
-void ObjectRecognizer::detectShelves(const cv::Mat& img, cv::Mat* debug_img)
-{
-  // Edge detection
-  cv::Mat img_edges;
-  cv::Canny(img, img_edges, CANNY_LOW_THRESHOLD, CANNY_LOW_THRESHOLD*3, 3);
-  // Line detection
-  std::vector<cv::Vec4i> lines;
-  cv::HoughLinesP(img_edges, lines, 1, HOUGH_ANGLE_RESOLUTION, HOUGH_THRESHOLD, HOUGH_MIN_LINE_LENGTH, HOUGH_MAX_LINE_GAP);
-  // Filter lines; We are interested in "horizontal" lines only
-  // TODO: use 3D transforms to determine which lines are actually horizontal
-  std::vector<cv::Vec4i> horizontal_lines;
-  for(size_t i = 0; i < lines.size(); i++)
-  {
-    if(abs(angle(lines[i])) <= LINE_HORIZONTAL_THRESHOLD)
-    {
-      horizontal_lines.push_back(lines[i]);
-    }
-  }
-  // Filter lines; We are interested in the LINE_MAX_NOF longest lines only
-  std::vector<cv::Vec4i> longest_lines;
-  std::sort(horizontal_lines.begin(), horizontal_lines.end(), CvVec4iComparator());
-  for(size_t i = 0; i < horizontal_lines.size() && i <= LINE_MAX_NOF; i++)
-  {
-    longest_lines.push_back(horizontal_lines[i]);
-  }
-  // Determine where the shelves run
-  // TODO
-  // Create debug image
-  if(debug_img)
-  {
-    for(size_t i = 0; i < longest_lines.size(); i++)
-    {
-      cv::Point a = cv::Point(longest_lines[i][0], longest_lines[i][1]),
-                b = cv::Point(longest_lines[i][2], longest_lines[i][3]);
-      cv::line(*debug_img, a, b, RED, 2, 8);
-    }
   }
 }
 

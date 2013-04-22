@@ -4,51 +4,59 @@
 #ifndef __OBJECT_RECOGNIZER__
 #define __OBJECT_RECOGNIZER__
 
+#include <thesis/Sample.h>
+
 #include <thesis/color.h>
-#include <thesis/object_database.h>
 #include <thesis/dbscan.h>
 
 #include <opencv2/nonfree/features2d.hpp>
 
 class ObjectRecognizer
 {
-  public:
+  public:    
+    struct ProcessedSample
+    {
+      std::string               id;
+      int                       width,
+                                height;
+      cv::Mat                   descriptors;
+      std::vector<cv::KeyPoint> keypoints;
+    };
+  
     struct Finding
     {
-      std::string id;
+      std::string              id;
       std::vector<cv::Point2f> image_points;
-      
-      Finding(std::string n, std::vector<cv::Point2f> pts)
-      {
-        id           = n;
-        image_points = pts;
-      }
     };
   
     // Default constructor
     ObjectRecognizer();
     // Default destructor
     ~ObjectRecognizer();
+
+    // Process and add a sample image to the database
+    ProcessedSample processSample(const cv::Mat& image, const std::string& id="");
     
     // Detect given object in given image
     void detectObject(const std::vector<cv::KeyPoint>& keypoints,
                       const cv::Mat& descriptors,
-                      ObjectDatabase::SampleObject& object,
-                      std::vector<Finding>& findings,
-                      cv::Mat* debug_img=0);
+                      const ProcessedSample& object,
+                      Finding& finding,
+                      cv::Mat* debug_image=NULL);
+    void detectObject(const cv::Mat& image,
+                      const ProcessedSample& object,
+                      Finding& finding,
+                      cv::Mat* debug_image=NULL);
     // Detect objects from given database in given image
-    void detectObjects(const cv::Mat& img,
-                       ObjectDatabase& database,
+    void detectObjects(const cv::Mat& image,
+                       const std::vector<ProcessedSample>& objects,
                        std::vector<Finding>& findings,
-                       cv::Mat* debug_img=0);
+                       cv::Mat* debug_image=NULL);
     // Cluster keypoints for smarter object recognition (experimental)
-    void detectObjectsClustered(const cv::Mat& img,
-                                ObjectDatabase& database,
+    void detectObjectsClustered(const cv::Mat& image,
+                                const std::vector<ProcessedSample>& objects,
                                 std::vector<Finding>& findings,
-                                cv::Mat* debug_img=0);
-    
-    // Detect shelves (that might contain objects)
-    void detectShelves(const cv::Mat& img, cv::Mat* debug_img=0);
+                                cv::Mat* debug_image=NULL);
     
     // Draw a single match
     void drawMatch(cv::Mat& img,

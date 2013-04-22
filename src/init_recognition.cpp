@@ -14,7 +14,6 @@
 #include <thesis/config.h>
 #include <thesis/math3d.h>
 #include <thesis/object_recognizer.h>
-#include <thesis/object_database.h>
 
 // We want to subscribe to multiple topics with one callback
 #include <message_filters/subscriber.h>
@@ -28,6 +27,10 @@ using namespace message_filters;
 #include <sensor_msgs/image_encodings.h>
 using namespace sensor_msgs;
 
+// We want to call these services
+#include <thesis/DatabaseList.h>
+#include <thesis/DatabaseGetByID.h>
+
 // We are going to publish messages of this type
 #include <thesis/ObjectStamped.h>
 #include <tf/transform_datatypes.h>
@@ -36,9 +39,10 @@ using namespace sensor_msgs;
 static const std::string DEBUG_IMAGE_WINDOW = "Debug Image";
 
 // Recognized-Objects Publisher
-ros::Publisher   object_publisher;
+ros::Publisher object_publisher;
+
 // Sample image database
-ObjectDatabase   object_database;
+std::vector<ObjectRecognizer::ProcessedSample> database;
 // Object recognizer
 ObjectRecognizer object_recognizer;
 // Camera model used to convert pixels to camera coordinates
@@ -67,7 +71,7 @@ void openni_callback(const Image::ConstPtr& rgb_input,
   cv::Mat debug_img = cv_ptr_bgr8->image.clone();
   // Detect objects
   std::vector<ObjectRecognizer::Finding> findings;
-  object_recognizer.detectObjects(cv_ptr_bgr8->image, object_database, findings, &debug_img);
+  object_recognizer.detectObjects(cv_ptr_bgr8->image, database, findings, &debug_img);
   // Publish recognized objects
   for(size_t i = 0; i < findings.size(); i++)
   {
@@ -113,6 +117,7 @@ void openni_callback(const Image::ConstPtr& rgb_input,
       cv::Point3f centroid = centroid3f(camera_coordinates);
       // Create a new message object and fill it with our calculations
       thesis::ObjectStamped msg;
+      msg.object_id                     = findings[i].id;
       msg.pose_stamped.header.stamp     = ros::Time::now();
       msg.pose_stamped.header.frame_id  = CAMERA_FRAME;
       msg.pose_stamped.pose.position.x  = centroid.x;
@@ -136,7 +141,43 @@ int main(int argc, char** argv)
   // Create debug image window
   cv::namedWindow(DEBUG_IMAGE_WINDOW);
   // Create image database
-  object_database = ObjectDatabase("img");
+  ros::ServiceClient db_list_client = nh.serviceClient<thesis::DatabaseList>("thesis/database/list");
+  thesis::DatabaseList list_srv;
+  if(db_list_client.call(list_srv))
+  {
+    ros::ServiceClient db_get_client = nh.serviceClient<thesis::DatabaseGetByID>("thesis/database/getByID");
+    thesis::DatabaseGetByID get_srv;
+    for(size_t i = 0; i < list_srv.response.list.size(); i++)
+    {
+      get_srv.request.id = list_srv.response.list[i];
+      if(db_get_client.call(get_srv))
+      {
+        // Convert ROS images to OpenCV images
+        cv_bridge::CvImagePtr cv_ptr;
+        try
+        {
+          cv_ptr = cv_bridge::toCvCopy(get_srv.response.sample.image, image_encodings::BGR8);
+        }
+        catch (cv_bridge::Exception& e)
+        {
+          ROS_ERROR("cv_bridge exception: %s", e.what());
+          return 1;
+        }
+        ObjectRecognizer::ProcessedSample sample = object_recognizer.processSample(cv_ptr->image, get_srv.response.sample.id);
+        database.push_back(sample);
+      }
+      else
+      {
+        ROS_ERROR("Failed to call service 'thesis/database/getByID'.");
+        return 1;
+      }
+    }
+  }
+  else
+  {
+    ROS_ERROR("Failed to call service 'thesis/database/list'.");
+    return 1;
+  }
   // Subscribe to relevant topics
   Subscriber<Image> rgb_subscriber(nh, "camera/rgb/image_rect_color", 1);
   Subscriber<Image> depth_subscriber(nh, "camera/depth_registered/image_rect", 1);

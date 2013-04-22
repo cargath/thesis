@@ -61,7 +61,7 @@ int main(int argc, char** argv)
   }
   // Advertise services
   ros::ServiceServer srv_list = nh.advertiseService("thesis/database/list", list);
-  ros::ServiceServer srv_get  = nh.advertiseService("thesis/database/get", get);
+  ros::ServiceServer srv_get  = nh.advertiseService("thesis/database/getByID", get);
   // Spin
   ros::spin();
   // Exit
