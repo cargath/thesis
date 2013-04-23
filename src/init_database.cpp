@@ -54,10 +54,12 @@ int main(int argc, char** argv)
     thesis::Sample sample;
     sample.id = filenames[i];
     // Convert OpenCV image to ROS image message
-    cv_bridge::CvImagePtr cv_ptr;
-    cv_ptr->encoding = sensor_msgs::image_encodings::BGR8;
-    cv_ptr->image    = images[i];
-    cv_ptr->toImageMsg(sample.image);
+    cv_bridge::CvImage cv_image;
+    cv_image.encoding = sensor_msgs::image_encodings::BGR8;
+    cv_image.image    = images[i];
+    cv_image.toImageMsg(sample.image);
+    // Add to database
+    samples[sample.id] = sample;
   }
   // Advertise services
   ros::ServiceServer srv_list = nh.advertiseService("thesis/database/list", list);

@@ -73,6 +73,7 @@ void openni_callback(const Image::ConstPtr& rgb_input,
   std::vector<ObjectRecognizer::Finding> findings;
   object_recognizer.detectObjects(cv_ptr_bgr8->image, database, findings, &debug_img);
   // Publish recognized objects
+  camera_model.fromCameraInfo(cam_info_input);
   for(size_t i = 0; i < findings.size(); i++)
   {
     // Get object points in camera coordinate space
@@ -163,6 +164,7 @@ int main(int argc, char** argv)
           ROS_ERROR("cv_bridge exception: %s", e.what());
           return 1;
         }
+        ROS_INFO("Loading sample '%s'.", get_srv.response.sample.id.c_str());
         ObjectRecognizer::ProcessedSample sample = object_recognizer.processSample(cv_ptr->image, get_srv.response.sample.id);
         database.push_back(sample);
       }
