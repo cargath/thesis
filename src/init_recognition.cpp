@@ -118,13 +118,13 @@ void openni_callback(const Image::ConstPtr& rgb_input,
       cv::Point3f centroid = centroid3f(camera_coordinates);
       // Create a new message object and fill it with our calculations
       thesis::ObjectStamped msg;
-      msg.object_id                     = findings[i].id;
-      msg.pose_stamped.header.stamp     = ros::Time::now();
-      msg.pose_stamped.header.frame_id  = CAMERA_FRAME;
-      msg.pose_stamped.pose.position.x  = centroid.x;
-      msg.pose_stamped.pose.position.y  = centroid.y;
-      msg.pose_stamped.pose.position.z  = centroid.z;
-      msg.pose_stamped.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(ypr.z, ypr.y, ypr.x);
+      msg.object_id                    = findings[i].id;
+      msg.object_pose.header.stamp     = ros::Time::now();
+      msg.object_pose.header.frame_id  = CAMERA_FRAME;
+      msg.object_pose.pose.position.x  = centroid.x;
+      msg.object_pose.pose.position.y  = centroid.y;
+      msg.object_pose.pose.position.z  = centroid.z;
+      msg.object_pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(ypr.z, ypr.y, ypr.x);
       // Publish message
       object_publisher.publish(msg);
     }
@@ -138,15 +138,15 @@ int main(int argc, char** argv)
 {
   // Initialize ROS
   ros::init(argc, argv, "thesis_recognition");
-  ros::NodeHandle nh;
+  ros::NodeHandle nh("~");
   // Create debug image window
   cv::namedWindow(DEBUG_IMAGE_WINDOW);
   // Create image database
-  ros::ServiceClient db_list_client = nh.serviceClient<thesis::DatabaseList>("thesis/database/list");
+  ros::ServiceClient db_list_client = nh.serviceClient<thesis::DatabaseList>("thesis_database/list");
   thesis::DatabaseList list_srv;
   if(db_list_client.call(list_srv))
   {
-    ros::ServiceClient db_get_client = nh.serviceClient<thesis::DatabaseGetByID>("thesis/database/getByID");
+    ros::ServiceClient db_get_client = nh.serviceClient<thesis::DatabaseGetByID>("thesis_database/getByID");
     thesis::DatabaseGetByID get_srv;
     for(size_t i = 0; i < list_srv.response.list.size(); i++)
     {
@@ -170,25 +170,31 @@ int main(int argc, char** argv)
       }
       else
       {
-        ROS_ERROR("Failed to call service 'thesis/database/getByID'.");
+        ROS_ERROR("Failed to call service 'thesis_database/getByID'.");
         return 1;
       }
     }
   }
   else
   {
-    ROS_ERROR("Failed to call service 'thesis/database/list'.");
+    ROS_ERROR("Failed to call service 'thesis_database/list'.");
     return 1;
   }
+  // Enable user to change topics to run the node on different devices
+  std::string rgb_topic, depth_topic, cam_info_topic;
+  nh.param("rgb_topic", rgb_topic, std::string("camera/rgb/image_rect_color"));
+  nh.param("depth_topic", depth_topic, std::string("camera/depth_registered/image_rect"));
+  nh.param("cam_info_topic", cam_info_topic, std::string("camera/depth_registered/camera_info"));
   // Subscribe to relevant topics
-  Subscriber<Image> rgb_subscriber(nh, "camera/rgb/image_rect_color", 1);
-  Subscriber<Image> depth_subscriber(nh, "camera/depth_registered/image_rect", 1);
-  Subscriber<CameraInfo> cam_info_subscriber(nh, "camera/depth_registered/camera_info", 1);
+  Subscriber<Image> rgb_subscriber(nh, rgb_topic, 1);
+  Subscriber<Image> depth_subscriber(nh, depth_topic, 1);
+  Subscriber<CameraInfo> cam_info_subscriber(nh, cam_info_topic, 1);
+  // Use one time-sychronized callback for all subscriptions
   typedef sync_policies::ApproximateTime<Image, Image, CameraInfo> SyncPolicy;
   Synchronizer<SyncPolicy> synchronizer(SyncPolicy(10), rgb_subscriber, depth_subscriber, cam_info_subscriber);
   synchronizer.registerCallback(boost::bind(&openni_callback, _1, _2, _3));
   // Publish recognized objects
-  object_publisher = nh.advertise<thesis::ObjectStamped>("thesis/recognition/objects", 1000);
+  object_publisher = nh.advertise<thesis::ObjectStamped>("objects", 1000);
   // Spin
   ros::spin();
   // Free memory

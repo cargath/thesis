@@ -1,2 +1,3 @@
 string object_id
-geometry_msgs/PoseStamped pose_stamped
+geometry_msgs/PoseStamped object_pose
+geometry_msgs/PoseStamped robot_pose

@@ -5,8 +5,15 @@
 // This is a ROS project
 #include <ros/ros.h>
 
+// Local headers
+#include <thesis/config.h>
+#include <thesis/semantic_map.h>
+
 // We want to subscribe to messages of this types
 #include <thesis/ObjectStamped.h>
+
+// We are going to publish object poses for debug purposes
+#include <geometry_msgs/Pose.h>
 
 // We are working with TF
 #include <tf/transform_listener.h>
@@ -14,46 +21,34 @@
 // Transform listener
 tf::TransformListener transform_listener;
 
-// Frame IDs
-static const std::string CAMERA_FRAME = "/head_mount_kinect_rgb_optical_frame";
-static const std::string MAP_FRAME    = "/map";
+// Publish transformed object poses for debug purposes
+ros::Publisher object_pose_publisher;
 
-void object_callback(const thesis::ObjectStamped& input)
+// The actual semantic map, storing recognized objects with map coordinates
+SemanticMap semantic_map;
+
+void object_callback(const thesis::ObjectStamped::ConstPtr& input)
 {
-  //
-  geometry_msgs::PoseStamped pose_camera,
-                             pose_map;
-  //
-  ros::Time current_transform = ros::Time::now();
-  transform_listener.waitForTransform(MAP_FRAME,
-			                                CAMERA_FRAME,
-			                                current_transform,
-			                                ros::Duration(5.0));
-  transform_listener.getLatestCommonTime(CAMERA_FRAME,
-                                         MAP_FRAME,
-				                                 current_transform,
-				                                 NULL);  
-  //
-  pose_camera.header.stamp       = current_transform;
-  pose_camera.header.frame_id    = CAMERA_FRAME;
-  pose_camera.pose.position.x    = input.pose_stamped.pose.position.x;
-  pose_camera.pose.position.y    = input.pose_stamped.pose.position.y;
-  pose_camera.pose.position.z    = input.pose_stamped.pose.position.z;
-  pose_camera.pose.orientation.x = input.pose_stamped.pose.orientation.x;
-  pose_camera.pose.orientation.y = input.pose_stamped.pose.orientation.y;
-  pose_camera.pose.orientation.z = input.pose_stamped.pose.orientation.z;
-  pose_camera.pose.orientation.w = input.pose_stamped.pose.orientation.w;
-  //
-  transform_listener.transformPose(MAP_FRAME, pose_camera, pose_map);
+  // Transform recognized object to map frame
+  thesis::ObjectStamped transformed;
+  transform_listener.waitForTransform(CAMERA_FRAME, MAP_FRAME, input->object_pose.header.stamp, TF_TIMEOUT);
+  transform_listener.transformPose(MAP_FRAME, input->object_pose, transformed.object_pose);
+  transformed.object_pose.header.stamp = ros::Time(0);
+  // Publish transformed object pose for debug purposes
+  object_pose_publisher.publish(transformed.object_pose);
+  // Add transformed object to map
+  semantic_map.add(transformed);
 }
 
 int main(int argc, char** argv)
 {
   // Initialize ROS
   ros::init(argc, argv, "thesis_mapping");
-  ros::NodeHandle nh;
+  ros::NodeHandle nh("~");
   // Subscribe to relevant topics
-  ros::Subscriber object_subscriber = nh.subscribe("thesis/recognition/objects", 1, object_callback);
+  ros::Subscriber object_subscriber = nh.subscribe("thesis_recognition/objects", 1, object_callback);
+  // Publish transformed object poses for debug purposes
+  object_pose_publisher = nh.advertise<geometry_msgs::PoseStamped>("object_pose", 1);
   // Spin
   ros::spin();
   // Exit

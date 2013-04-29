@@ -35,7 +35,7 @@ rosbuild_add_executable(init_recognition src/init_recognition.cpp)
 target_link_libraries(init_recognition lib_math lib_recognition)
 
 # Node semantic mapping
-rosbuild_add_executable(init_mapping src/init_mapping.cpp)
+rosbuild_add_executable(init_mapping src/init_mapping.cpp src/semantic_map.cpp)
 
 # Link with boost
 target_link_libraries(init_database boost_filesystem boost_system)
