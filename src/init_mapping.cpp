@@ -9,14 +9,19 @@
 #include <thesis/config.h>
 #include <thesis/semantic_map.h>
 
+// We are working with TF
+#include <tf/transform_listener.h>
+
 // We want to subscribe to messages of this types
 #include <thesis/ObjectStamped.h>
 
 // We are going to publish object poses for debug purposes
 #include <geometry_msgs/Pose.h>
 
-// We are working with TF
-#include <tf/transform_listener.h>
+// This node provides these services
+#include <thesis/MappingGetAll.h>
+#include <thesis/MappingGetByID.h>
+#include <thesis/MappingGetByPosition.h>
 
 // Transform listener
 tf::TransformListener transform_listener;
@@ -40,6 +45,31 @@ void object_callback(const thesis::ObjectStamped::ConstPtr& input)
   semantic_map.add(transformed);
 }
 
+bool get_all(thesis::MappingGetAll::Request& request,
+             thesis::MappingGetAll::Response& result)
+{
+  semantic_map.getAll(result.objects);
+  return true;
+}
+
+bool get_by_type(thesis::MappingGetByID::Request& request,
+                 thesis::MappingGetByID::Response& result)
+{
+  semantic_map.getByID(request.id, result.objects);
+  return true;
+}
+
+bool get_by_position(thesis::MappingGetByPosition::Request& request,
+                     thesis::MappingGetByPosition::Response& result)
+{
+  cv::Point3f p;
+  p.x = request.position.x;
+  p.y = request.position.y;
+  p.z = request.position.z;
+  semantic_map.getByPosition(p, result.objects);
+  return true;
+}
+
 int main(int argc, char** argv)
 {
   // Initialize ROS
@@ -49,6 +79,10 @@ int main(int argc, char** argv)
   ros::Subscriber object_subscriber = nh.subscribe("thesis_recognition/objects", 1, object_callback);
   // Publish transformed object poses for debug purposes
   object_pose_publisher = nh.advertise<geometry_msgs::PoseStamped>("object_pose", 1);
+  // Advertise services
+  ros::ServiceServer srv_all         = nh.advertiseService("all", get_all);
+  ros::ServiceServer srv_by_type     = nh.advertiseService("by_type", get_by_type);
+  ros::ServiceServer srv_by_position = nh.advertiseService("by_position", get_by_position);
   // Spin
   ros::spin();
   // Exit

@@ -13,8 +13,9 @@
 #include <thesis/image_loader.h>
 
 // This node provides these services
-#include <thesis/DatabaseList.h>
+#include <thesis/DatabaseGetAll.h>
 #include <thesis/DatabaseGetByID.h>
+#include <thesis/DatabaseList.h>
 
 ImageLoader image_loader;
 
@@ -22,8 +23,8 @@ ImageLoader image_loader;
 typedef std::map<std::string, thesis::Sample> SampleMap;
 SampleMap samples;
 
-bool list(thesis::DatabaseList::Request& request,
-          thesis::DatabaseList::Response& result)
+bool get_list(thesis::DatabaseList::Request& request,
+              thesis::DatabaseList::Response& result)
 {
   for(SampleMap::iterator it = samples.begin(); it != samples.end(); it++)
   {
@@ -32,8 +33,18 @@ bool list(thesis::DatabaseList::Request& request,
   return true;
 }
 
-bool get(thesis::DatabaseGetByID::Request& request,
-         thesis::DatabaseGetByID::Response& result)
+bool get_all(thesis::DatabaseGetAll::Request& request,
+             thesis::DatabaseGetAll::Response& result)
+{
+  for(SampleMap::iterator it = samples.begin(); it != samples.end(); it++)
+  {
+    result.samples.push_back(it->second);
+  }
+  return true;
+}
+
+bool get_by_type(thesis::DatabaseGetByID::Request& request,
+                 thesis::DatabaseGetByID::Response& result)
 {
   result.sample = samples[request.id];
   return true;
@@ -62,8 +73,9 @@ int main(int argc, char** argv)
     samples[sample.id] = sample;
   }
   // Advertise services
-  ros::ServiceServer srv_list = nh.advertiseService("list", list);
-  ros::ServiceServer srv_get  = nh.advertiseService("getByID", get);
+  ros::ServiceServer srv_list    = nh.advertiseService("list", get_list);
+  ros::ServiceServer srv_all     = nh.advertiseService("all", get_all);
+  ros::ServiceServer srv_by_type = nh.advertiseService("by_type", get_by_type);
   // Spin
   ros::spin();
   // Exit

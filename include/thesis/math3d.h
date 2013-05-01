@@ -20,6 +20,11 @@ inline float mag3f(cv::Point3f p)
   return sqrt(p.x*p.x + p.y*p.y + p.z*p.z);
 }
 
+inline float dist3f(cv::Point3f a, cv::Point3f b)
+{
+  return mag3f(b - a);
+}
+
 inline cv::Point3f norm3f(cv::Point3f p)
 {
   cv::Point3f n;

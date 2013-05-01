@@ -146,7 +146,7 @@ int main(int argc, char** argv)
   thesis::DatabaseList list_srv;
   if(db_list_client.call(list_srv))
   {
-    ros::ServiceClient db_get_client = nh.serviceClient<thesis::DatabaseGetByID>("thesis_database/getByID");
+    ros::ServiceClient db_get_client = nh.serviceClient<thesis::DatabaseGetByID>("thesis_database/by_type");
     thesis::DatabaseGetByID get_srv;
     for(size_t i = 0; i < list_srv.response.list.size(); i++)
     {
@@ -170,7 +170,7 @@ int main(int argc, char** argv)
       }
       else
       {
-        ROS_ERROR("Failed to call service 'thesis_database/getByID'.");
+        ROS_ERROR("Failed to call service 'thesis_database/by_type'.");
         return 1;
       }
     }
