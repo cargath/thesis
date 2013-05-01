@@ -74,15 +74,16 @@ int main(int argc, char** argv)
 {
   // Initialize ROS
   ros::init(argc, argv, "thesis_mapping");
-  ros::NodeHandle nh("~");
+  ros::NodeHandle nh;
+  ros::NodeHandle nh_private("~");
   // Subscribe to relevant topics
   ros::Subscriber object_subscriber = nh.subscribe("thesis_recognition/objects", 1, object_callback);
   // Publish transformed object poses for debug purposes
-  object_pose_publisher = nh.advertise<geometry_msgs::PoseStamped>("object_pose", 1);
+  object_pose_publisher = nh_private.advertise<geometry_msgs::PoseStamped>("object_pose", 1);
   // Advertise services
-  ros::ServiceServer srv_all         = nh.advertiseService("all", get_all);
-  ros::ServiceServer srv_by_type     = nh.advertiseService("by_type", get_by_type);
-  ros::ServiceServer srv_by_position = nh.advertiseService("by_position", get_by_position);
+  ros::ServiceServer srv_all         = nh_private.advertiseService("all", get_all);
+  ros::ServiceServer srv_by_type     = nh_private.advertiseService("by_type", get_by_type);
+  ros::ServiceServer srv_by_position = nh_private.advertiseService("by_position", get_by_position);
   // Spin
   ros::spin();
   // Exit

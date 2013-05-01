@@ -28,8 +28,7 @@ using namespace message_filters;
 using namespace sensor_msgs;
 
 // We want to call these services
-#include <thesis/DatabaseList.h>
-#include <thesis/DatabaseGetByID.h>
+#include <thesis/DatabaseGetAll.h>
 
 // We are going to publish messages of this type
 #include <thesis/ObjectStamped.h>
@@ -138,46 +137,36 @@ int main(int argc, char** argv)
 {
   // Initialize ROS
   ros::init(argc, argv, "thesis_recognition");
-  ros::NodeHandle nh("~");
+  ros::NodeHandle nh;
+  ros::NodeHandle nh_private("~");
   // Create debug image window
   cv::namedWindow(DEBUG_IMAGE_WINDOW);
   // Create image database
-  ros::ServiceClient db_list_client = nh.serviceClient<thesis::DatabaseList>("thesis_database/list");
-  thesis::DatabaseList list_srv;
-  if(db_list_client.call(list_srv))
+  ros::ServiceClient db_get_all_client = nh.serviceClient<thesis::DatabaseGetAll>("thesis_database/all");
+  thesis::DatabaseGetAll db_get_all_service;
+  if(db_get_all_client.call(db_get_all_service))
   {
-    ros::ServiceClient db_get_client = nh.serviceClient<thesis::DatabaseGetByID>("thesis_database/by_type");
-    thesis::DatabaseGetByID get_srv;
-    for(size_t i = 0; i < list_srv.response.list.size(); i++)
+    for(size_t i = 0; i < db_get_all_service.response.samples.size(); i++)
     {
-      get_srv.request.id = list_srv.response.list[i];
-      if(db_get_client.call(get_srv))
+      // Convert ROS images to OpenCV images
+      cv_bridge::CvImagePtr cv_ptr;
+      try
       {
-        // Convert ROS images to OpenCV images
-        cv_bridge::CvImagePtr cv_ptr;
-        try
-        {
-          cv_ptr = cv_bridge::toCvCopy(get_srv.response.sample.image, image_encodings::BGR8);
-        }
-        catch (cv_bridge::Exception& e)
-        {
-          ROS_ERROR("cv_bridge exception: %s", e.what());
-          return 1;
-        }
-        ROS_INFO("Loading sample '%s'.", get_srv.response.sample.id.c_str());
-        ObjectRecognizer::ProcessedSample sample = object_recognizer.processSample(cv_ptr->image, get_srv.response.sample.id);
-        database.push_back(sample);
+        cv_ptr = cv_bridge::toCvCopy(db_get_all_service.response.samples[i].image, image_encodings::BGR8);
       }
-      else
+      catch (cv_bridge::Exception& e)
       {
-        ROS_ERROR("Failed to call service 'thesis_database/by_type'.");
+        ROS_ERROR("cv_bridge exception: %s", e.what());
         return 1;
       }
+      ROS_INFO("Loading sample '%s'.", db_get_all_service.response.samples[i].id.c_str());
+      ObjectRecognizer::ProcessedSample sample = object_recognizer.processSample(cv_ptr->image, db_get_all_service.response.samples[i].id);
+      database.push_back(sample);
     }
   }
   else
   {
-    ROS_ERROR("Failed to call service 'thesis_database/list'.");
+    ROS_ERROR("Failed to call service 'thesis_database/all'.");
     return 1;
   }
   // Enable user to change topics to run the node on different devices
@@ -194,7 +183,7 @@ int main(int argc, char** argv)
   Synchronizer<SyncPolicy> synchronizer(SyncPolicy(10), rgb_subscriber, depth_subscriber, cam_info_subscriber);
   synchronizer.registerCallback(boost::bind(&openni_callback, _1, _2, _3));
   // Publish recognized objects
-  object_publisher = nh.advertise<thesis::ObjectStamped>("objects", 1000);
+  object_publisher = nh_private.advertise<thesis::ObjectStamped>("objects", 1000);
   // Spin
   ros::spin();
   // Free memory

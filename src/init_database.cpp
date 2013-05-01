@@ -54,7 +54,7 @@ int main(int argc, char** argv)
 {
   // Initialize ROS
   ros::init(argc, argv, "thesis_database");
-  ros::NodeHandle nh("~");
+  ros::NodeHandle nh_private("~");
   // Create sample database
   std::vector<cv::Mat> images;
   std::vector<std::string> filenames;
@@ -73,9 +73,9 @@ int main(int argc, char** argv)
     samples[sample.id] = sample;
   }
   // Advertise services
-  ros::ServiceServer srv_list    = nh.advertiseService("list", get_list);
-  ros::ServiceServer srv_all     = nh.advertiseService("all", get_all);
-  ros::ServiceServer srv_by_type = nh.advertiseService("by_type", get_by_type);
+  ros::ServiceServer srv_list    = nh_private.advertiseService("list", get_list);
+  ros::ServiceServer srv_all     = nh_private.advertiseService("all", get_all);
+  ros::ServiceServer srv_by_type = nh_private.advertiseService("by_type", get_by_type);
   // Spin
   ros::spin();
   // Exit
