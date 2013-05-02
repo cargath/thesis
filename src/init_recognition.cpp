@@ -75,6 +75,9 @@ void openni_callback(const Image::ConstPtr& rgb_input,
   camera_model.fromCameraInfo(cam_info_input);
   for(size_t i = 0; i < findings.size(); i++)
   {
+    // Create new message
+    thesis::ObjectStamped msg;
+    msg.object_id = findings[i].id;
     // Get object points in camera coordinate space
     std::vector<cv::Point3f> camera_coordinates;
     for(size_t j = 0; j < findings[i].image_points.size(); j++)
@@ -115,18 +118,40 @@ void openni_callback(const Image::ConstPtr& rgb_input,
       cv::Point3f ypr = xyz2ypr(n);
       // Get centroid of the object in camera coordinate space
       cv::Point3f centroid = centroid3f(camera_coordinates);
-      // Create a new message object and fill it with our calculations
-      thesis::ObjectStamped msg;
-      msg.object_id                    = findings[i].id;
+      // Fill message with our calculations
       msg.object_pose.header.stamp     = ros::Time::now();
       msg.object_pose.header.frame_id  = CAMERA_FRAME;
       msg.object_pose.pose.position.x  = centroid.x;
       msg.object_pose.pose.position.y  = centroid.y;
       msg.object_pose.pose.position.z  = centroid.z;
       msg.object_pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(ypr.z, ypr.y, ypr.x);
-      // Publish message
-      object_publisher.publish(msg);
     }
+    else
+    {
+      // No depth value available
+      // Fill object pose with placeholders instead of throwing it away,
+      // (camera pose - see below - might still be useful)
+      msg.object_pose.header.stamp       = ros::Time(0);
+      msg.object_pose.header.frame_id    = MAP_FRAME;
+      msg.object_pose.pose.position.x    = std::numeric_limits<float>::quiet_NaN();
+      msg.object_pose.pose.position.y    = std::numeric_limits<float>::quiet_NaN();
+      msg.object_pose.pose.position.z    = std::numeric_limits<float>::quiet_NaN();
+      msg.object_pose.pose.orientation.x = std::numeric_limits<float>::quiet_NaN();
+      msg.object_pose.pose.orientation.y = std::numeric_limits<float>::quiet_NaN();
+      msg.object_pose.pose.orientation.z = std::numeric_limits<float>::quiet_NaN();
+      msg.object_pose.pose.orientation.w = std::numeric_limits<float>::quiet_NaN();
+    }
+    // Get camera angles
+    cv::Point3f ypr_camera = xyz2ypr(cv::Point3f(0.0f, 0.0f, 1.0f));
+    // Fill message with our calculations
+    msg.camera_pose.header.stamp     = ros::Time::now();
+    msg.camera_pose.header.frame_id  = CAMERA_FRAME;
+    msg.camera_pose.pose.position.x  = 0;
+    msg.camera_pose.pose.position.y  = 0;
+    msg.camera_pose.pose.position.z  = 0;
+    msg.camera_pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(ypr_camera.z, ypr_camera.y, ypr_camera.x);
+    // Publish message
+    object_publisher.publish(msg);
   }
   // Show debug image
   cv::imshow(DEBUG_IMAGE_WINDOW, debug_img);

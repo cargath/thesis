@@ -39,9 +39,11 @@ void ObjectRecognizer::detectObject(const std::vector<cv::KeyPoint>& keypoints,
                                     ObjectRecognizer::Finding& finding,
                                     cv::Mat* debug_image)
 {
+  if(descriptors.empty()) return;
   // Compute matches
   std::vector<cv::DMatch> matches;
   descriptor_matcher.match(object.descriptors, descriptors, matches);
+  std::cout << matches.size() << std::endl;
   // Filter matches by distance
   double min_distance = 100.0,
          max_distance =   0.0;
@@ -56,6 +58,7 @@ void ObjectRecognizer::detectObject(const std::vector<cv::KeyPoint>& keypoints,
       max_distance = matches[i].distance;
     }
   }
+  std::cout << "min_distance: " << min_distance << std::endl;
   std::vector<cv::DMatch> matches_filtered;
   for(size_t i = 0; i < matches.size(); i++)
   {

@@ -26,21 +26,28 @@
 // Transform listener
 tf::TransformListener transform_listener;
 
-// Publish transformed object poses for debug purposes
+// Publish transformed object + camera poses for debug purposes
 ros::Publisher object_pose_publisher;
+ros::Publisher camera_pose_publisher;
 
 // The actual semantic map, storing recognized objects with map coordinates
 SemanticMap semantic_map;
 
 void object_callback(const thesis::ObjectStamped::ConstPtr& input)
 {
-  // Transform recognized object to map frame
   thesis::ObjectStamped transformed;
-  transform_listener.waitForTransform(CAMERA_FRAME, MAP_FRAME, input->object_pose.header.stamp, TF_TIMEOUT);
-  transform_listener.transformPose(MAP_FRAME, input->object_pose, transformed.object_pose);
-  transformed.object_pose.header.stamp = ros::Time(0);
-  // Publish transformed object pose for debug purposes
-  object_pose_publisher.publish(transformed.object_pose);
+  transform_listener.waitForTransform(CAMERA_FRAME, MAP_FRAME, input->camera_pose.header.stamp, TF_TIMEOUT);
+  // Transform recognized camera pose to map frame
+  transform_listener.transformPose(MAP_FRAME, input->camera_pose, transformed.camera_pose);
+  transformed.camera_pose.header.stamp = ros::Time(0);
+  camera_pose_publisher.publish(transformed.camera_pose);
+  // If available, transform recognized object pose to map frame
+  if(!isnan(input->object_pose.pose.position.z))
+  {
+    transform_listener.transformPose(MAP_FRAME, input->object_pose, transformed.object_pose);
+    transformed.object_pose.header.stamp = ros::Time(0);
+    object_pose_publisher.publish(transformed.object_pose);
+  }
   // Add transformed object to map
   semantic_map.add(transformed);
 }
@@ -78,8 +85,9 @@ int main(int argc, char** argv)
   ros::NodeHandle nh_private("~");
   // Subscribe to relevant topics
   ros::Subscriber object_subscriber = nh.subscribe("thesis_recognition/objects", 1, object_callback);
-  // Publish transformed object poses for debug purposes
+  // Publish transformed object + camera poses for debug purposes
   object_pose_publisher = nh_private.advertise<geometry_msgs::PoseStamped>("object_pose", 1);
+  camera_pose_publisher = nh_private.advertise<geometry_msgs::PoseStamped>("camera_pose", 1);
   // Advertise services
   ros::ServiceServer srv_all         = nh_private.advertiseService("all", get_all);
   ros::ServiceServer srv_by_type     = nh_private.advertiseService("by_type", get_by_type);
