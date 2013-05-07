@@ -241,7 +241,7 @@ int main(int argc, char** argv)
     ROS_ERROR("Failed to call service 'thesis_database/get_all'.");
     return 1;
   }
-  // Create reusable service clients
+  // Initialize reusable service clients
   db_set_by_type_client = nh.serviceClient<thesis::DatabaseSetByID>("thesis_database/set_by_type");
   // Enable user to change topics to run the node on different devices
   std::string rgb_topic, depth_topic, cam_info_topic;

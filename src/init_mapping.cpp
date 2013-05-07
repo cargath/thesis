@@ -15,6 +15,9 @@
 // We want to subscribe to messages of this types
 #include <thesis/ObjectStamped.h>
 
+// We want to call these services
+#include <thesis/DatabaseGetByID.h>
+
 // We are going to publish object poses for debug purposes
 #include <geometry_msgs/Pose.h>
 
@@ -29,6 +32,9 @@ tf::TransformListener transform_listener;
 // Publish transformed object + camera poses for debug purposes
 ros::Publisher object_pose_publisher;
 ros::Publisher camera_pose_publisher;
+
+// Reusable service clients
+ros::ServiceClient db_get_by_type_client;
 
 // The actual semantic map, storing recognized objects with map coordinates
 SemanticMap semantic_map;
@@ -49,7 +55,20 @@ void object_callback(const thesis::ObjectStamped::ConstPtr& input)
     object_pose_publisher.publish(transformed.object_pose);
   }
   // Add transformed object to map
-  semantic_map.add(transformed);
+  thesis::DatabaseGetByID db_get_by_type_service;
+  db_get_by_type_service.request.id = input->object_id;
+  if(db_get_by_type_client.call(db_get_by_type_service))
+  {
+    float min_distance = (db_get_by_type_service.response.sample.width
+                       +  db_get_by_type_service.response.sample.height) / 2;
+    semantic_map.add(transformed, min_distance);
+  }
+  else
+  {
+    semantic_map.add(transformed);
+    ROS_WARN("Failed to call service 'thesis_database/set_by_type'.");
+    return;
+  }
 }
 
 bool get_all(thesis::MappingGetAll::Request& request,
@@ -83,6 +102,8 @@ int main(int argc, char** argv)
   ros::init(argc, argv, "thesis_mapping");
   ros::NodeHandle nh;
   ros::NodeHandle nh_private("~");
+  // Initialize reusable service clients
+  db_get_by_type_client = nh.serviceClient<thesis::DatabaseGetByID>("thesis_database/get_by_type");
   // Subscribe to relevant topics
   ros::Subscriber object_subscriber = nh.subscribe("thesis_recognition/objects", 1, object_callback);
   // Publish transformed object + camera poses for debug purposes
