@@ -29,6 +29,7 @@ using namespace sensor_msgs;
 
 // We want to call these services
 #include <thesis/DatabaseGetAll.h>
+#include <thesis/DatabaseSetByID.h>
 
 // We are going to publish messages of this type
 #include <thesis/ObjectStamped.h>
@@ -40,8 +41,12 @@ static const std::string DEBUG_IMAGE_WINDOW = "Debug Image";
 // Recognized-Objects Publisher
 ros::Publisher object_publisher;
 
+// Reusable service clients
+ros::ServiceClient db_set_by_type_client;
+
 // Sample image database
 std::vector<ObjectRecognizer::ProcessedSample> database;
+std::map<std::string, ObjectRecognizer::ProcessedSample> database_mapped;
 // Object recognizer
 ObjectRecognizer object_recognizer;
 // Camera model used to convert pixels to camera coordinates
@@ -110,6 +115,47 @@ void openni_callback(const Image::ConstPtr& rgb_input,
       // Calculate 2 vectors of a triangle on the (planar) object
       cv::Point3f a = camera_coordinates[1] - camera_coordinates[0],
                   b = camera_coordinates[2] - camera_coordinates[0];
+      // Calculate their lengths
+      float ma = mag3f(a),
+            mb = mag3f(b);
+      // Determine which is width and which is height
+      // by looking up which is the longer side of the sample image.
+      // Takes a few more comparisons,
+      // but works with only 3 of an objects 4 corners.
+      thesis::DatabaseSetByID db_set_by_type_service;
+      ObjectRecognizer::ProcessedSample sample = database_mapped[findings[i].id];
+      if(sample.width < sample.height)
+      {
+        if(ma < mb)
+        {
+          db_set_by_type_service.request.sample.width  = ma;
+          db_set_by_type_service.request.sample.height = mb;
+        }
+        else
+        {
+          db_set_by_type_service.request.sample.width  = mb;
+          db_set_by_type_service.request.sample.height = ma;
+        }
+      }
+      else
+      {
+        if(ma < mb)
+        {
+          db_set_by_type_service.request.sample.width  = mb;
+          db_set_by_type_service.request.sample.height = ma;
+        }
+        else
+        {
+          db_set_by_type_service.request.sample.width  = ma;
+          db_set_by_type_service.request.sample.height = mb;
+        }
+      }
+      // Train database
+      if(!db_set_by_type_client.call(db_set_by_type_service))
+      {
+        ROS_ERROR("Failed to call service 'thesis_database/set_by_type'.");
+        return;
+      }
       // Calculate their cross product
       cv::Point3f c = cross3f(a, b);
       // Normalize surface normal
@@ -167,7 +213,7 @@ int main(int argc, char** argv)
   // Create debug image window
   cv::namedWindow(DEBUG_IMAGE_WINDOW);
   // Create image database
-  ros::ServiceClient db_get_all_client = nh.serviceClient<thesis::DatabaseGetAll>("thesis_database/all");
+  ros::ServiceClient db_get_all_client = nh.serviceClient<thesis::DatabaseGetAll>("thesis_database/get_all");
   thesis::DatabaseGetAll db_get_all_service;
   if(db_get_all_client.call(db_get_all_service))
   {
@@ -187,13 +233,16 @@ int main(int argc, char** argv)
       ROS_INFO("Loading sample '%s'.", db_get_all_service.response.samples[i].id.c_str());
       ObjectRecognizer::ProcessedSample sample = object_recognizer.processSample(cv_ptr->image, db_get_all_service.response.samples[i].id);
       database.push_back(sample);
+      database_mapped[db_get_all_service.response.samples[i].id] = sample;
     }
   }
   else
   {
-    ROS_ERROR("Failed to call service 'thesis_database/all'.");
+    ROS_ERROR("Failed to call service 'thesis_database/get_all'.");
     return 1;
   }
+  // Create reusable service clients
+  db_set_by_type_client = nh.serviceClient<thesis::DatabaseSetByID>("thesis_database/set_by_type");
   // Enable user to change topics to run the node on different devices
   std::string rgb_topic, depth_topic, cam_info_topic;
   nh.param("rgb_topic", rgb_topic, std::string("camera/rgb/image_rect_color"));

@@ -16,6 +16,7 @@
 #include <thesis/DatabaseGetAll.h>
 #include <thesis/DatabaseGetByID.h>
 #include <thesis/DatabaseList.h>
+#include <thesis/DatabaseSetByID.h>
 
 ImageLoader image_loader;
 
@@ -50,6 +51,19 @@ bool get_by_type(thesis::DatabaseGetByID::Request& request,
   return true;
 }
 
+bool set_by_type(thesis::DatabaseSetByID::Request& request,
+                 thesis::DatabaseSetByID::Response& result)
+{
+  thesis::Sample temp = samples[request.sample.id];
+  if(temp.accuracy < INT_MAX)
+  {
+    samples[request.sample.id].accuracy++;
+  }
+  samples[request.sample.id].width  = (temp.width  * temp.accuracy + request.sample.width)  / (temp.accuracy + 1);
+  samples[request.sample.id].height = (temp.height * temp.accuracy + request.sample.height) / (temp.accuracy + 1);
+  return true;
+}
+
 int main(int argc, char** argv)
 {
   // Initialize ROS
@@ -73,9 +87,10 @@ int main(int argc, char** argv)
     samples[sample.id] = sample;
   }
   // Advertise services
-  ros::ServiceServer srv_list    = nh_private.advertiseService("list", get_list);
-  ros::ServiceServer srv_all     = nh_private.advertiseService("all", get_all);
-  ros::ServiceServer srv_by_type = nh_private.advertiseService("by_type", get_by_type);
+  ros::ServiceServer srv_list    = nh_private.advertiseService("get_list", get_list);
+  ros::ServiceServer srv_all     = nh_private.advertiseService("get_all", get_all);
+  ros::ServiceServer srv_by_type = nh_private.advertiseService("get_by_type", get_by_type);
+  ros::ServiceServer srv_update  = nh_private.advertiseService("set_by_type", set_by_type);
   // Spin
   ros::spin();
   // Exit
