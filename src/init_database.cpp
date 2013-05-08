@@ -69,10 +69,13 @@ int main(int argc, char** argv)
   // Initialize ROS
   ros::init(argc, argv, "thesis_database");
   ros::NodeHandle nh_private("~");
+  // Get path to image directory
+  std::string image_path;
+  nh_private.param("image_path", image_path, std::string("img"));
   // Create sample database
   std::vector<cv::Mat> images;
   std::vector<std::string> filenames;
-  image_loader.load_directory("img", images, &filenames);
+  image_loader.load_directory(image_path, images, &filenames);
   ROS_ASSERT_MSG(images.size() == filenames.size(), "#images should be the same as #filenames.");
   for(size_t i = 0; i < images.size(); i++)
   {
