@@ -13,14 +13,14 @@
 
 class ObjectRecognizer
 {
-  public:    
+  public:
     struct ProcessedSample
     {
       std::string               id;
       int                       width,
                                 height;
-      cv::Mat                   descriptors;
       std::vector<cv::KeyPoint> keypoints;
+      cv::Mat                   descriptors;
     };
   
     struct Finding

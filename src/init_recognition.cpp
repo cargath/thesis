@@ -244,7 +244,9 @@ int main(int argc, char** argv)
   // Initialize reusable service clients
   db_set_by_type_client = nh.serviceClient<thesis::DatabaseSetByID>("thesis_database/set_by_type");
   // Enable user to change topics to run the node on different devices
-  std::string rgb_topic, depth_topic, cam_info_topic;
+  std::string rgb_topic,
+              depth_topic,
+              cam_info_topic;
   nh.param("rgb_topic", rgb_topic, std::string("camera/rgb/image_rect_color"));
   nh.param("depth_topic", depth_topic, std::string("camera/depth_registered/image_rect"));
   nh.param("cam_info_topic", cam_info_topic, std::string("camera/depth_registered/camera_info"));
