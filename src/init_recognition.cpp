@@ -44,11 +44,16 @@ ros::Publisher object_publisher;
 // Reusable service clients
 ros::ServiceClient db_set_by_type_client;
 
-// Sample image database
-std::vector<ObjectRecognizer::ProcessedSample> database;
-std::map<std::string, ObjectRecognizer::ProcessedSample> database_mapped;
+// Information about a collection of images
+typedef std::vector<ObjectRecognizer::ImageInfo> AlbumInfo;
+// Map a collection of mipmaps of a sample image to the corresponding ID
+typedef std::map<std::string, AlbumInfo> ProcessedDatabase;
+// The processed database of sample images
+ProcessedDatabase database_processed;
+
 // Object recognizer
 ObjectRecognizer object_recognizer;
+
 // Camera model used to convert pixels to camera coordinates
 image_geometry::PinholeCameraModel camera_model;
 
@@ -72,44 +77,67 @@ void openni_callback(const Image::ConstPtr& rgb_input,
   // Depth values are stored as 32bit float
   cv::Mat1f depth_image(cv_ptr_depth->image);
   // Create a copy to draw stuff on (for debugging purposes)
-  cv::Mat debug_img = cv_ptr_bgr8->image.clone();
-  // Detect objects
-  std::vector<ObjectRecognizer::Finding> findings;
-  object_recognizer.detectObjects(cv_ptr_bgr8->image, database, findings, &debug_img);
+  cv::Mat debug_image = cv_ptr_bgr8->image.clone();
+  // Process camera image
+  ObjectRecognizer::ImageInfo cam_img_info;
+  object_recognizer.getImageInfo(cv_ptr_bgr8->image, cam_img_info);
+  // Draw keypoints to debug image
+  cv::drawKeypoints(debug_image, cam_img_info.keypoints, debug_image, BLUE);
+  // Recognize objects
+  typedef std::vector<cv::Point2f> Cluster2f;
+  typedef std::map<std::string, Cluster2f> Points2IDMap;
+  Points2IDMap findings;
+  for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
+  {
+    // Iterate over mipmaps of current object
+    for(size_t i = 0; i < it->second.size(); i++)
+    {
+      Cluster2f object_points;
+      object_recognizer.recognize(cam_img_info, it->second[i], object_points, &debug_image);
+      // If an object was succesfully recognized,
+      // no need to look at the other mipmaps
+      if(object_points.size() >= 3)
+      {
+        findings[it->first] = object_points;
+        break;
+      }
+    }
+  }
   // Publish recognized objects
   camera_model.fromCameraInfo(cam_info_input);
-  for(size_t i = 0; i < findings.size(); i++)
+  for(Points2IDMap::iterator it = findings.begin(); it != findings.end(); it++)
   {
     // Create new message
     thesis::ObjectStamped msg;
-    msg.object_id = findings[i].id;
+    msg.object_id = it->first;
     // Get object points in camera coordinate space
     std::vector<cv::Point3f> camera_coordinates;
-    for(size_t j = 0; j < findings[i].image_points.size(); j++)
+    for(size_t i = 0; i < it->second.size(); i++)
     {
       // Check if point is located inside bounds of the image
-      if(!(findings[i].image_points[j].x <  cv_ptr_bgr8->image.cols
-        && findings[i].image_points[j].y <  cv_ptr_bgr8->image.rows
-        && findings[i].image_points[j].x >= 0
-        && findings[i].image_points[j].y >= 0))
+      if(!(it->second[i].x <  cv_ptr_bgr8->image.cols
+        && it->second[i].y <  cv_ptr_bgr8->image.rows
+        && it->second[i].x >= 0
+        && it->second[i].y >= 0))
       {
         continue;
       }
       // Get depth value for current pixel
-      float depth = depth_image[(int)findings[i].image_points[j].y][(int)findings[i].image_points[j].x];
+      float depth = depth_image[(int)it->second[i].y][(int)it->second[i].x];
       // Check if there is a valid depth value for this pixel
       if(isnan(depth) || depth == 0)
       {
         continue;
       }
       // Project object point to camera space
-      cv::Point3f camera_coordinate = camera_model.projectPixelTo3dRay(findings[i].image_points[j]);
+      cv::Point3f camera_coordinate = camera_model.projectPixelTo3dRay(it->second[i]);
       // Use distance from depth image to get actual 3D position in camera space
       camera_coordinate *= depth;
       // Add result to our vector holding successfully transformed points
       camera_coordinates.push_back(camera_coordinate);
     }
-    // We need at least 3 corners of an (planar) object to calculate its orientation / surface normal
+    // We need at least 3 corners of an (planar) object
+    // to calculate its orientation / surface normal
     if(camera_coordinates.size() >= 3)
     {
       // Calculate 2 vectors of a triangle on the (planar) object
@@ -123,8 +151,8 @@ void openni_callback(const Image::ConstPtr& rgb_input,
       // Takes a few more comparisons,
       // but works with only 3 of an objects 4 corners.
       thesis::DatabaseSetByID db_set_by_type_service;
-      ObjectRecognizer::ProcessedSample sample = database_mapped[findings[i].id];
-      if(sample.width < sample.height)
+      ObjectRecognizer::ImageInfo image_info = database_processed[it->first].front();
+      if(image_info.width < image_info.height)
       {
         if(ma < mb)
         {
@@ -200,7 +228,7 @@ void openni_callback(const Image::ConstPtr& rgb_input,
     object_publisher.publish(msg);
   }
   // Show debug image
-  cv::imshow(DEBUG_IMAGE_WINDOW, debug_img);
+  cv::imshow(DEBUG_IMAGE_WINDOW, debug_image);
   cv::waitKey(3);
 }
 
@@ -212,6 +240,15 @@ int main(int argc, char** argv)
   ros::NodeHandle nh_private("~");
   // Create debug image window
   cv::namedWindow(DEBUG_IMAGE_WINDOW);
+  // Get number of mipmaps from parameter server
+  int nof_mipmaps;
+  nh.param("nof_mipmaps", nof_mipmaps, 1);
+  if(nof_mipmaps < 1)
+  {
+    ROS_WARN("Number of mipmaps (%i) out of bounds. At least one mipmap is required.", nof_mipmaps);
+    nof_mipmaps = 1;
+  }
+  float mipmaps_step_size = 1.0f / (float) nof_mipmaps;
   // Create image database
   ros::ServiceClient db_get_all_client = nh.serviceClient<thesis::DatabaseGetAll>("thesis_database/get_all");
   thesis::DatabaseGetAll db_get_all_service;
@@ -231,9 +268,16 @@ int main(int argc, char** argv)
         return 1;
       }
       ROS_INFO("Loading sample '%s'.", db_get_all_service.response.samples[i].id.c_str());
-      ObjectRecognizer::ProcessedSample sample = object_recognizer.processSample(cv_ptr->image, db_get_all_service.response.samples[i].id);
-      database.push_back(sample);
-      database_mapped[db_get_all_service.response.samples[i].id] = sample;
+      // Create mipmaps
+      for(float i = mipmaps_step_size; i <= 1.0f; i += mipmaps_step_size)
+      {
+        cv::Mat mipmap;
+        cv::resize(cv_ptr->image, mipmap, cv::Size(), i, i);
+        // Process mipmap image (compute keypoints and descriptors)
+        ObjectRecognizer::ImageInfo image_info;
+        object_recognizer.getImageInfo(cv_ptr->image, image_info);
+        database_processed[db_get_all_service.response.samples[i].id].push_back(image_info);
+      }
     }
   }
   else
@@ -243,7 +287,7 @@ int main(int argc, char** argv)
   }
   // Initialize reusable service clients
   db_set_by_type_client = nh.serviceClient<thesis::DatabaseSetByID>("thesis_database/set_by_type");
-  // Enable user to change topics to run the node on different devices
+  // Enable user to change topics (to run the node on different devices)
   std::string rgb_topic,
               depth_topic,
               cam_info_topic;
