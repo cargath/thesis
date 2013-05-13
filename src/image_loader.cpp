@@ -18,7 +18,7 @@ ImageLoader::~ImageLoader()
 
 bool ImageLoader::load_image(const std::string& path, cv::Mat& out_image)
 {
-  out_image = cv::imread(path);
+  out_image = cv::imread(path, CV_LOAD_IMAGE_GRAYSCALE);
   if(!out_image.empty())
   {
     ROS_INFO("Loading '%s'.", path.c_str());

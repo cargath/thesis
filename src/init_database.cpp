@@ -134,7 +134,7 @@ int main(int argc, char** argv)
     }
     // Convert OpenCV image to ROS image message
     cv_bridge::CvImage cv_image;
-    cv_image.encoding = sensor_msgs::image_encodings::BGR8;
+    cv_image.encoding = sensor_msgs::image_encodings::MONO8;
     cv_image.image    = resized;
     cv_image.toImageMsg(sample.image);
     // Add to database

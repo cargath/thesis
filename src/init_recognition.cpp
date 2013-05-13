@@ -62,11 +62,11 @@ void openni_callback(const Image::ConstPtr& rgb_input,
                      const CameraInfo::ConstPtr& cam_info_input)
 {
   // Convert ROS images to OpenCV images
-  cv_bridge::CvImagePtr cv_ptr_bgr8,
+  cv_bridge::CvImagePtr cv_ptr_mono8,
                         cv_ptr_depth;
   try
   {
-    cv_ptr_bgr8  = cv_bridge::toCvCopy(rgb_input,   image_encodings::BGR8);
+    cv_ptr_mono8 = cv_bridge::toCvCopy(rgb_input,   image_encodings::MONO8);
     cv_ptr_depth = cv_bridge::toCvCopy(depth_input, image_encodings::TYPE_32FC1);
   }
   catch (cv_bridge::Exception& e)
@@ -77,10 +77,10 @@ void openni_callback(const Image::ConstPtr& rgb_input,
   // Depth values are stored as 32bit float
   cv::Mat1f depth_image(cv_ptr_depth->image);
   // Create a copy to draw stuff on (for debugging purposes)
-  cv::Mat debug_image = cv_ptr_bgr8->image.clone();
+  cv::Mat debug_image = cv_ptr_mono8->image.clone();
   // Process camera image
   ObjectRecognizer::ImageInfo cam_img_info;
-  object_recognizer.getImageInfo(cv_ptr_bgr8->image, cam_img_info);
+  object_recognizer.getImageInfo(cv_ptr_mono8->image, cam_img_info);
   // Draw keypoints to debug image
   cv::drawKeypoints(debug_image, cam_img_info.keypoints, debug_image, BLUE);
   // Recognize objects
@@ -115,8 +115,8 @@ void openni_callback(const Image::ConstPtr& rgb_input,
     for(size_t i = 0; i < it->second.size(); i++)
     {
       // Check if point is located inside bounds of the image
-      if(!(it->second[i].x <  cv_ptr_bgr8->image.cols
-        && it->second[i].y <  cv_ptr_bgr8->image.rows
+      if(!(it->second[i].x <  cv_ptr_mono8->image.cols
+        && it->second[i].y <  cv_ptr_mono8->image.rows
         && it->second[i].x >= 0
         && it->second[i].y >= 0))
       {
@@ -260,7 +260,7 @@ int main(int argc, char** argv)
       cv_bridge::CvImagePtr cv_ptr;
       try
       {
-        cv_ptr = cv_bridge::toCvCopy(db_get_all_service.response.samples[i].image, image_encodings::BGR8);
+        cv_ptr = cv_bridge::toCvCopy(db_get_all_service.response.samples[i].image, image_encodings::MONO8);
       }
       catch (cv_bridge::Exception& e)
       {
@@ -291,7 +291,7 @@ int main(int argc, char** argv)
   std::string rgb_topic,
               depth_topic,
               cam_info_topic;
-  nh.param("rgb_topic", rgb_topic, std::string("camera/rgb/image_rect_color"));
+  nh.param("rgb_topic", rgb_topic, std::string("camera/rgb/image_rect"));
   nh.param("depth_topic", depth_topic, std::string("camera/depth_registered/image_rect"));
   nh.param("cam_info_topic", cam_info_topic, std::string("camera/depth_registered/camera_info"));
   // Subscribe to relevant topics
