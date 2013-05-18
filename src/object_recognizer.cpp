@@ -46,9 +46,9 @@ void ObjectRecognizer::recognize(const ImageInfo& cam_img_info,
   std::vector<cv::DMatch> matches;
   descriptor_matcher.match(cam_img_info.descriptors, sample_info.descriptors, matches);
   
-  std::cout << "Descs in Sample: " << sample_info.descriptors.total()  << std::endl;
-  std::cout << "Descs in Camera: " << cam_img_info.descriptors.total() << std::endl;
-  std::cout << "Matches:         " << matches.size() << std::endl;
+  //std::cout << "Descs in Sample: " << sample_info.descriptors.total()  << std::endl;
+  //std::cout << "Descs in Camera: " << cam_img_info.descriptors.total() << std::endl;
+  //std::cout << "Matches:         " << matches.size() << std::endl;
   
   // Filter matches by distance
   double min_distance = 100.0,
@@ -65,7 +65,7 @@ void ObjectRecognizer::recognize(const ImageInfo& cam_img_info,
     }
   }
   
-  std::cout << "min_distance:    " << min_distance << std::endl << std::endl;
+  //std::cout << "min_distance:    " << min_distance << std::endl << std::endl;
   
   std::vector<cv::DMatch> matches_filtered;
   for(size_t i = 0; i < matches.size(); i++)

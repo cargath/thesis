@@ -89,10 +89,11 @@ void openni_callback(const Image::ConstPtr& rgb_input,
   Points2IDMap findings;
   for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
   {
+    std::cout << "Test ";
     // Iterate over mipmaps of current object
     for(size_t i = 0; i < it->second.size(); i++)
     {
-      Cluster2f object_points;
+      /*Cluster2f object_points;
       object_recognizer.recognize(cam_img_info, it->second[i], object_points, &debug_image);
       // If an object was succesfully recognized,
       // no need to look at the other mipmaps
@@ -100,9 +101,10 @@ void openni_callback(const Image::ConstPtr& rgb_input,
       {
         findings[it->first] = object_points;
         break;
-      }
+      }*/
     }
   }
+  std::cout << std::endl;
   // Publish recognized objects
   camera_model.fromCameraInfo(cam_info_input);
   for(Points2IDMap::iterator it = findings.begin(); it != findings.end(); it++)
@@ -269,10 +271,10 @@ int main(int argc, char** argv)
       }
       ROS_INFO("Loading sample '%s'.", db_get_all_service.response.samples[i].id.c_str());
       // Create mipmaps
-      for(float i = mipmaps_step_size; i <= 1.0f; i += mipmaps_step_size)
+      for(float j = mipmaps_step_size; j <= 1.0f; j += mipmaps_step_size)
       {
         cv::Mat mipmap;
-        cv::resize(cv_ptr->image, mipmap, cv::Size(), i, i);
+        cv::resize(cv_ptr->image, mipmap, cv::Size(), j, j);
         // Process mipmap image (compute keypoints and descriptors)
         ObjectRecognizer::ImageInfo image_info;
         object_recognizer.getImageInfo(cv_ptr->image, image_info);
