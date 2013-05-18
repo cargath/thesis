@@ -4,7 +4,7 @@
 
 #include <thesis/object_recognizer.h>
 
-typedef std::vector<cv::DMatch> DMatches;
+#include <thesis/graham_scanner.h>
 
 ObjectRecognizer::ObjectRecognizer()
 {
@@ -95,15 +95,34 @@ void ObjectRecognizer::recognize(const ImageInfo& cam_img_info,
     object_corners[2] = cvPoint(sample_info.width, sample_info.height);
     object_corners[3] = cvPoint(                0, sample_info.height);
     cv::perspectiveTransform(object_corners, scene_corners, homography);
+    // Filter false positives:
+    // Check if object corners in scene are twisted
+    cv::Scalar debug_color = GREEN;
+    if((scene_corners[0].x < scene_corners[1].x && scene_corners[3].x > scene_corners[2].x)
+    || (scene_corners[0].x > scene_corners[1].x && scene_corners[3].x < scene_corners[2].x)
+    || (scene_corners[0].y < scene_corners[3].y && scene_corners[1].y > scene_corners[2].y)
+    || (scene_corners[0].y > scene_corners[3].y && scene_corners[1].y < scene_corners[2].y))
+    {
+      debug_color = RED;
+    }
+    // Filter false positives:
+    // Check if set of scene points is convex
+    // (i.e. all points are part of the convex hull)
+    std::vector<cv::Point2f> convex_hull;
+    GrahamScanner::grahamScan(scene_corners, convex_hull);
+    if(convex_hull.size() < scene_corners.size())
+    {
+      debug_color = RED;
+    }
     // Add recognized object points to output
     object_points = scene_corners;
     // Create debug image
     if(debug_image)
     {
-      line(*debug_image, scene_corners[0], scene_corners[1], RED);
-      line(*debug_image, scene_corners[1], scene_corners[2], RED);
-      line(*debug_image, scene_corners[2], scene_corners[3], RED);
-      line(*debug_image, scene_corners[3], scene_corners[0], RED);
+      line(*debug_image, scene_corners[0], scene_corners[1], debug_color);
+      line(*debug_image, scene_corners[1], scene_corners[2], debug_color);
+      line(*debug_image, scene_corners[2], scene_corners[3], debug_color);
+      line(*debug_image, scene_corners[3], scene_corners[0], debug_color);
     }
   }
 }
