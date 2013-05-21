@@ -93,15 +93,15 @@ void openni_callback(const Image::ConstPtr& rgb_input,
     // Iterate over mipmaps of current object
     for(size_t i = 0; i < it->second.size(); i++)
     {
-      /*Cluster2f object_points;
-      object_recognizer.recognize(cam_img_info, it->second[i], object_points, &debug_image);
+      Cluster2f object_points;
+      object_recognizer.recognize(it->second[i], cam_img_info, object_points, &debug_image);
       // If an object was succesfully recognized,
       // no need to look at the other mipmaps
       if(object_points.size() >= 3)
       {
         findings[it->first] = object_points;
         break;
-      }*/
+      }
     }
   }
   std::cout << std::endl;

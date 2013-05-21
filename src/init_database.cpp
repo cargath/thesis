@@ -55,7 +55,7 @@ bool set_by_type(thesis::DatabaseSetByID::Request& request,
                  thesis::DatabaseSetByID::Response& result)
 {
   thesis::Sample temp = samples[request.sample.id];
-  if(temp.accuracy < INT_MAX)
+  if(temp.accuracy < INT_MAX-1)
   {
     samples[request.sample.id].accuracy++;
   }
