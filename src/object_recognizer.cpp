@@ -34,7 +34,7 @@ void ObjectRecognizer::getImageInfo(const cv::Mat& image, ImageInfo& image_info)
   image_info.matcher.train();
 }
 
-void ObjectRecognizer::recognize(const ImageInfo& sample_info,
+void ObjectRecognizer::recognize(ImageInfo& sample_info,
                                  const cv::Mat& camera_image,
                                  std::vector<cv::Point2f>& object_points,
                                  cv::Mat* debug_image)
@@ -44,7 +44,7 @@ void ObjectRecognizer::recognize(const ImageInfo& sample_info,
   recognize(sample_info, cam_img_info, object_points, debug_image);
 }
 
-void ObjectRecognizer::recognize(const ImageInfo& sample_info,
+void ObjectRecognizer::recognize(ImageInfo& sample_info,
                                  ImageInfo& cam_img_info,
                                  std::vector<cv::Point2f>& object_points,
                                  cv::Mat* debug_image)
@@ -52,26 +52,22 @@ void ObjectRecognizer::recognize(const ImageInfo& sample_info,
   if(cam_img_info.descriptors.empty()) return;
   if(sample_info.descriptors.empty())  return;
   // Find the k=2 nearest neighbours
+  
+  //cv::Mat descs;
+  
   std::vector<std::vector<cv::DMatch> > matches;
   cam_img_info.matcher.knnMatch(sample_info.descriptors, matches, 2);
-  // Filter matches by distance
-  double min_distance = 100.0,
-         max_distance =   0.0;
-  for(size_t i = 0; i < matches.size(); i++)
-  {
-    if(matches[i][0].distance < min_distance)
-    {
-      min_distance = matches[i][0].distance;
-    }
-    if(matches[i][0].distance > max_distance)
-    {
-      max_distance = matches[i][0].distance;
-    }
-  }
+  
+  //std::vector<std::vector<cv::DMatch> > matches2;
+  //sample_info.matcher.knnMatch(descs, matches2, 2);
+  
+  // Filter matches:
+  // By ratio of nearest and second nearest neighbour distance
   std::vector<cv::DMatch> matches_filtered;
   for(size_t i = 0; i < matches.size(); i++)
   {
-    if(matches[i][0].distance < 3*min_distance)
+    float ratio = matches[i][0].distance / matches[i][1].distance;
+    if(ratio < 0.8f)
     {
       matches_filtered.push_back(matches[i][0]);
     }

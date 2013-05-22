@@ -30,13 +30,13 @@ class ObjectRecognizer
     void getImageInfo(const cv::Mat& image, ImageInfo& image_info);
     
     //
-    void recognize(const ImageInfo& sample_info,
+    void recognize(ImageInfo& sample_info,
                    const cv::Mat& camera_image,
                    std::vector<cv::Point2f>& object_points,
                    cv::Mat* debug_image=NULL);
     
     //
-    void recognize(const ImageInfo& sample_info,
+    void recognize(ImageInfo& sample_info,
                    ImageInfo& cam_img_info,
                    std::vector<cv::Point2f>& object_points,
                    cv::Mat* debug_image=NULL);
