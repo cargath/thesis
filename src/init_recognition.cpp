@@ -38,6 +38,9 @@ using namespace sensor_msgs;
 // Debug image window
 static const std::string DEBUG_IMAGE_WINDOW = "Debug Image";
 
+// Number of mipmaps to create
+int nof_mipmaps;
+
 // Recognized-Objects Publisher
 ros::Publisher object_publisher;
 
@@ -243,7 +246,6 @@ int main(int argc, char** argv)
   // Create debug image window
   cv::namedWindow(DEBUG_IMAGE_WINDOW);
   // Get number of mipmaps from parameter server
-  int nof_mipmaps;
   nh.param("nof_mipmaps", nof_mipmaps, 0);
   if(nof_mipmaps < 0)
   {
@@ -275,12 +277,14 @@ int main(int argc, char** argv)
       database_processed[db_get_all_service.response.samples[i].id].push_back(image_info);
       // Create mipmaps
       cv::Mat mipmap = cv_ptr->image.clone();
+      AlbumInfo::iterator it;
       for(float j = 0; j < nof_mipmaps; j++)
       {
         cv::pyrDown(mipmap, mipmap);
         // Process mipmap image (compute keypoints and descriptors)
         object_recognizer.getImageInfo(mipmap, image_info);
-        database_processed[db_get_all_service.response.samples[i].id].push_back(image_info);
+        it = database_processed[db_get_all_service.response.samples[i].id].begin();
+        database_processed[db_get_all_service.response.samples[i].id].insert(it, image_info);
       }
     }
   }
