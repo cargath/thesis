@@ -244,13 +244,12 @@ int main(int argc, char** argv)
   cv::namedWindow(DEBUG_IMAGE_WINDOW);
   // Get number of mipmaps from parameter server
   int nof_mipmaps;
-  nh.param("nof_mipmaps", nof_mipmaps, 1);
-  if(nof_mipmaps < 1)
+  nh.param("nof_mipmaps", nof_mipmaps, 0);
+  if(nof_mipmaps < 0)
   {
-    ROS_WARN("Number of mipmaps (%i) out of bounds. At least one mipmap is required.", nof_mipmaps);
-    nof_mipmaps = 1;
+    ROS_ERROR("Number of mipmaps (%i) out of bounds.", nof_mipmaps);
+    return 1;
   }
-  float mipmaps_step_size = 1.0f / (float) nof_mipmaps;
   // Create image database
   ros::ServiceClient db_get_all_client = nh.serviceClient<thesis::DatabaseGetAll>("thesis_database/get_all");
   thesis::DatabaseGetAll db_get_all_service;
@@ -270,14 +269,17 @@ int main(int argc, char** argv)
         return 1;
       }
       ROS_INFO("Loading sample '%s'.", db_get_all_service.response.samples[i].id.c_str());
+      // Process image
+      ObjectRecognizer::ImageInfo image_info;
+      object_recognizer.getImageInfo(cv_ptr->image, image_info);
+      database_processed[db_get_all_service.response.samples[i].id].push_back(image_info);
       // Create mipmaps
-      for(float j = mipmaps_step_size; j <= 1.0f; j += mipmaps_step_size)
+      cv::Mat mipmap = cv_ptr->image.clone();
+      for(float j = 0; j < nof_mipmaps; j++)
       {
-        cv::Mat mipmap;
-        cv::resize(cv_ptr->image, mipmap, cv::Size(), j, j);
+        cv::pyrDown(mipmap, mipmap);
         // Process mipmap image (compute keypoints and descriptors)
-        ObjectRecognizer::ImageInfo image_info;
-        object_recognizer.getImageInfo(cv_ptr->image, image_info);
+        object_recognizer.getImageInfo(mipmap, image_info);
         database_processed[db_get_all_service.response.samples[i].id].push_back(image_info);
       }
     }
