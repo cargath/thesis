@@ -61,6 +61,10 @@ bool set_by_type(thesis::DatabaseSetByID::Request& request,
   }
   samples[request.sample.id].width  = (temp.width  * temp.accuracy + request.sample.width)  / (temp.accuracy + 1);
   samples[request.sample.id].height = (temp.height * temp.accuracy + request.sample.height) / (temp.accuracy + 1);
+  
+  std::cout << samples[request.sample.id].width  << std::endl;
+  std::cout << samples[request.sample.id].height << std::endl;
+  
   return true;
 }
 

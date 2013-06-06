@@ -59,7 +59,7 @@ void ObjectRecognizer::recognize(ImageInfo& sample_info,
   cam_img_info.matcher.knnMatch(sample_info.descriptors, matches, 2);
   
   //std::vector<std::vector<cv::DMatch> > matches2;
-  //sample_info.matcher.knnMatch(descs, matches2, 2);
+  //sample_info.matcher.knnMatch(cam_img_info.descriptors, matches2, 2);
   
   // Filter matches:
   // By ratio of nearest and second nearest neighbour distance

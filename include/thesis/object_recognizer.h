@@ -45,7 +45,6 @@ class ObjectRecognizer
     // Reusable OpenCV stuff for working with images
     cv::SurfFeatureDetector feature_detector;
     cv::SurfDescriptorExtractor descriptor_extractor;
-    cv::FlannBasedMatcher descriptor_matcher;
 };
 
 #endif //__OBJECT_RECOGNIZER__

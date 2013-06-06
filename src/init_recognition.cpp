@@ -71,6 +71,18 @@ void openni_callback(const Image::ConstPtr& rgb_input,
   {
     cv_ptr_mono8 = cv_bridge::toCvCopy(rgb_input,   image_encodings::MONO8);
     cv_ptr_depth = cv_bridge::toCvCopy(depth_input, image_encodings::TYPE_32FC1);
+    
+    cv::Mat cv_mono8_tmp,
+            cv_depth_tmp;
+    
+    cv::pyrDown(cv_ptr_mono8->image, cv_mono8_tmp);
+    cv::pyrDown(cv_ptr_depth->image, cv_depth_tmp);
+    
+    //cv::pyrDown(cv_mono8_tmp, cv_mono8_tmp);
+    //cv::pyrDown(cv_depth_tmp, cv_depth_tmp);
+    
+    cv_ptr_mono8->image = cv_mono8_tmp;
+    cv_ptr_depth->image = cv_depth_tmp;
   }
   catch (cv_bridge::Exception& e)
   {
@@ -81,6 +93,23 @@ void openni_callback(const Image::ConstPtr& rgb_input,
   cv::Mat1f depth_image(cv_ptr_depth->image);
   // Create a copy to draw stuff on (for debugging purposes)
   cv::Mat debug_image = cv_ptr_mono8->image.clone();
+  
+  // Create mipmaps (but don't process them yet)
+  std::vector<cv::Mat> camera_mipmaps;
+  cv::Mat camera_mipmap;
+  for(int i = 0; i < nof_mipmaps; i++)
+  {
+    cv::pyrDown(camera_mipmap, camera_mipmap);
+    camera_mipmaps.insert(camera_mipmaps.begin(), camera_mipmap);
+  }
+  camera_mipmaps.push_back(cv_ptr_mono8->image);
+  
+  // 
+  for(size_t i = 0; i < camera_mipmaps.size(); i++)
+  {
+    
+  }
+  
   // Process camera image
   ObjectRecognizer::ImageInfo cam_img_info;
   object_recognizer.getImageInfo(cv_ptr_mono8->image, cam_img_info);
@@ -92,7 +121,6 @@ void openni_callback(const Image::ConstPtr& rgb_input,
   Points2IDMap findings;
   for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
   {
-    std::cout << "Test ";
     // Iterate over mipmaps of current object
     for(size_t i = 0; i < it->second.size(); i++)
     {
@@ -107,7 +135,6 @@ void openni_callback(const Image::ConstPtr& rgb_input,
       }
     }
   }
-  std::cout << std::endl;
   // Publish recognized objects
   camera_model.fromCameraInfo(cam_info_input);
   for(Points2IDMap::iterator it = findings.begin(); it != findings.end(); it++)
@@ -156,6 +183,7 @@ void openni_callback(const Image::ConstPtr& rgb_input,
       // Takes a few more comparisons,
       // but works with only 3 of an objects 4 corners.
       thesis::DatabaseSetByID db_set_by_type_service;
+     // db_set_by_type_service.id = 
       ObjectRecognizer::ImageInfo image_info = database_processed[it->first].front();
       if(image_info.width < image_info.height)
       {
@@ -184,7 +212,8 @@ void openni_callback(const Image::ConstPtr& rgb_input,
         }
       }
       // Train database
-      if(!db_set_by_type_client.call(db_set_by_type_service))
+      std::cout << "Test" << std::endl;
+      if(true) //!db_set_by_type_client.call(db_set_by_type_service))
       {
         ROS_ERROR("Failed to call service 'thesis_database/set_by_type'.");
         return;
@@ -316,6 +345,6 @@ int main(int argc, char** argv)
   ros::spin();
   // Free memory
   cv::destroyWindow(DEBUG_IMAGE_WINDOW);
-  // Exit
+  // Exit with success
   return 0;
 }
