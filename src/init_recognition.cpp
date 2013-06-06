@@ -183,7 +183,7 @@ void openni_callback(const Image::ConstPtr& rgb_input,
       // Takes a few more comparisons,
       // but works with only 3 of an objects 4 corners.
       thesis::DatabaseSetByID db_set_by_type_service;
-     // db_set_by_type_service.id = 
+      db_set_by_type_service.id = it->first;
       ObjectRecognizer::ImageInfo image_info = database_processed[it->first].front();
       if(image_info.width < image_info.height)
       {
@@ -212,8 +212,7 @@ void openni_callback(const Image::ConstPtr& rgb_input,
         }
       }
       // Train database
-      std::cout << "Test" << std::endl;
-      if(true) //!db_set_by_type_client.call(db_set_by_type_service))
+      if(!db_set_by_type_client.call(db_set_by_type_service))
       {
         ROS_ERROR("Failed to call service 'thesis_database/set_by_type'.");
         return;
