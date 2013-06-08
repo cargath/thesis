@@ -49,18 +49,14 @@ void ObjectRecognizer::recognize(ImageInfo& sample_info,
                                  std::vector<cv::Point2f>& object_points,
                                  cv::Mat* debug_image)
 {
-  if(cam_img_info.descriptors.empty()) return;
-  if(sample_info.descriptors.empty())  return;
-  // Find the k=2 nearest neighbours
-  
-  //cv::Mat descs;
-  
+  // Otherwise an OpenCV assertion would fail for images without keypoints
+  if(cam_img_info.descriptors.empty() || sample_info.descriptors.empty())
+  {
+    return;
+  }
+  // Find the k = 2 nearest neighbours
   std::vector<std::vector<cv::DMatch> > matches;
   cam_img_info.matcher.knnMatch(sample_info.descriptors, matches, 2);
-  
-  //std::vector<std::vector<cv::DMatch> > matches2;
-  //sample_info.matcher.knnMatch(cam_img_info.descriptors, matches2, 2);
-  
   // Filter matches:
   // By ratio of nearest and second nearest neighbour distance
   std::vector<cv::DMatch> matches_filtered;

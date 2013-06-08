@@ -36,10 +36,11 @@ using namespace sensor_msgs;
 #include <tf/transform_datatypes.h>
 
 // Debug image window
-static const std::string DEBUG_IMAGE_WINDOW = "Debug Image";
+static const std::string CAMERA_DEBUG_IMAGE_WINDOW = "Camera Debug Image";
+static const std::string MIPMAP_DEBUG_IMAGE_WINDOW = "Mipmap Debug Image";
 
 // Number of mipmaps to create
-int nof_mipmaps;
+int mipmap_level;
 
 // Recognized-Objects Publisher
 ros::Publisher object_publisher;
@@ -47,10 +48,10 @@ ros::Publisher object_publisher;
 // Reusable service clients
 ros::ServiceClient db_set_by_type_client;
 
-// Information about a collection of images
-typedef std::vector<ObjectRecognizer::ImageInfo> AlbumInfo;
-// Map a collection of mipmaps of a sample image to the corresponding ID
-typedef std::map<std::string, AlbumInfo> ProcessedDatabase;
+// A pair of ImageInfo (here used for a sample image and its mipmap)
+typedef std::pair<ObjectRecognizer::ImageInfo, ObjectRecognizer::ImageInfo> ImageInfoPair;
+// Map a sample image and its mipmap to the corresponding ID
+typedef std::map<std::string, ImageInfoPair> ProcessedDatabase;
 // The processed database of sample images
 ProcessedDatabase database_processed;
 
@@ -59,6 +60,15 @@ ObjectRecognizer object_recognizer;
 
 // Camera model used to convert pixels to camera coordinates
 image_geometry::PinholeCameraModel camera_model;
+
+void create_mipmap(const cv::Mat& image, cv::Mat& mipmap, unsigned int n)
+{
+  mipmap = image.clone();
+  for(unsigned int i = 0; i < n; i++)
+  {
+    cv::pyrDown(mipmap, mipmap);
+  }
+}
 
 void openni_callback(const Image::ConstPtr& rgb_input,
                      const Image::ConstPtr& depth_input,
@@ -71,69 +81,45 @@ void openni_callback(const Image::ConstPtr& rgb_input,
   {
     cv_ptr_mono8 = cv_bridge::toCvCopy(rgb_input,   image_encodings::MONO8);
     cv_ptr_depth = cv_bridge::toCvCopy(depth_input, image_encodings::TYPE_32FC1);
-    
-    cv::Mat cv_mono8_tmp,
-            cv_depth_tmp;
-    
-    cv::pyrDown(cv_ptr_mono8->image, cv_mono8_tmp);
-    cv::pyrDown(cv_ptr_depth->image, cv_depth_tmp);
-    
-    //cv::pyrDown(cv_mono8_tmp, cv_mono8_tmp);
-    //cv::pyrDown(cv_depth_tmp, cv_depth_tmp);
-    
-    cv_ptr_mono8->image = cv_mono8_tmp;
-    cv_ptr_depth->image = cv_depth_tmp;
   }
   catch (cv_bridge::Exception& e)
   {
     ROS_ERROR("cv_bridge exception: %s", e.what());
     return;
   }
+  // Create mipmap of camera image
+  cv::Mat cam_img_mipmap;
+  create_mipmap(cv_ptr_mono8->image, cam_img_mipmap, mipmap_level);
+  // Create copies to draw stuff on (for debugging purposes)
+  cv::Mat camera_debug_image = cv_ptr_mono8->image.clone(),
+          mipmap_debug_image = cam_img_mipmap.clone();
   // Depth values are stored as 32bit float
   cv::Mat1f depth_image(cv_ptr_depth->image);
-  // Create a copy to draw stuff on (for debugging purposes)
-  cv::Mat debug_image = cv_ptr_mono8->image.clone();
   
-  // Create mipmaps (but don't process them yet)
-  std::vector<cv::Mat> camera_mipmaps;
-  cv::Mat camera_mipmap;
-  for(int i = 0; i < nof_mipmaps; i++)
-  {
-    cv::pyrDown(camera_mipmap, camera_mipmap);
-    camera_mipmaps.insert(camera_mipmaps.begin(), camera_mipmap);
-  }
-  camera_mipmaps.push_back(cv_ptr_mono8->image);
+  // Process the mipmap of the camera image
+  ObjectRecognizer::ImageInfo cam_img_mipmap_info;
+  object_recognizer.getImageInfo(cam_img_mipmap, cam_img_mipmap_info);
+  // Draw keypoints to debug image
+  cv::drawKeypoints(mipmap_debug_image, cam_img_mipmap_info.keypoints, mipmap_debug_image, BLUE);
   
-  // 
-  for(size_t i = 0; i < camera_mipmaps.size(); i++)
-  {
-    
-  }
+  // Recognize sample mipmaps on camera mipmap
+  
   
   // Process camera image
   ObjectRecognizer::ImageInfo cam_img_info;
   object_recognizer.getImageInfo(cv_ptr_mono8->image, cam_img_info);
   // Draw keypoints to debug image
-  cv::drawKeypoints(debug_image, cam_img_info.keypoints, debug_image, BLUE);
+  cv::drawKeypoints(camera_debug_image, cam_img_info.keypoints, camera_debug_image, BLUE);
+  
   // Recognize objects
   typedef std::vector<cv::Point2f> Cluster2f;
   typedef std::map<std::string, Cluster2f> Points2IDMap;
   Points2IDMap findings;
   for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
   {
-    // Iterate over mipmaps of current object
-    for(size_t i = 0; i < it->second.size(); i++)
-    {
-      Cluster2f object_points;
-      object_recognizer.recognize(it->second[i], cam_img_info, object_points, &debug_image);
-      // If an object was succesfully recognized,
-      // no need to look at the other mipmaps
-      if(object_points.size() >= 3)
-      {
-        findings[it->first] = object_points;
-        break;
-      }
-    }
+    Cluster2f object_points;
+    object_recognizer.recognize(it->second.first, cam_img_info, object_points, &camera_debug_image);
+    findings[it->first] = object_points;
   }
   // Publish recognized objects
   camera_model.fromCameraInfo(cam_info_input);
@@ -183,8 +169,8 @@ void openni_callback(const Image::ConstPtr& rgb_input,
       // Takes a few more comparisons,
       // but works with only 3 of an objects 4 corners.
       thesis::DatabaseSetByID db_set_by_type_service;
-      db_set_by_type_service.id = it->first;
-      ObjectRecognizer::ImageInfo image_info = database_processed[it->first].front();
+      db_set_by_type_service.request.sample.id = it->first;
+      ObjectRecognizer::ImageInfo image_info = database_processed[it->first].first;
       if(image_info.width < image_info.height)
       {
         if(ma < mb)
@@ -261,7 +247,8 @@ void openni_callback(const Image::ConstPtr& rgb_input,
     object_publisher.publish(msg);
   }
   // Show debug image
-  cv::imshow(DEBUG_IMAGE_WINDOW, debug_image);
+  cv::imshow(CAMERA_DEBUG_IMAGE_WINDOW, camera_debug_image);
+  cv::imshow(MIPMAP_DEBUG_IMAGE_WINDOW, mipmap_debug_image);
   cv::waitKey(3);
 }
 
@@ -272,12 +259,13 @@ int main(int argc, char** argv)
   ros::NodeHandle nh;
   ros::NodeHandle nh_private("~");
   // Create debug image window
-  cv::namedWindow(DEBUG_IMAGE_WINDOW);
+  cv::namedWindow(CAMERA_DEBUG_IMAGE_WINDOW);
+  cv::namedWindow(MIPMAP_DEBUG_IMAGE_WINDOW);
   // Get number of mipmaps from parameter server
-  nh.param("nof_mipmaps", nof_mipmaps, 0);
-  if(nof_mipmaps < 0)
+  nh.param("mipmap_level", mipmap_level, 1);
+  if(mipmap_level < 0)
   {
-    ROS_ERROR("Number of mipmaps (%i) out of bounds.", nof_mipmaps);
+    ROS_ERROR("Mipmap level (%i) out of bounds.", mipmap_level);
     return 1;
   }
   // Create image database
@@ -299,21 +287,17 @@ int main(int argc, char** argv)
         return 1;
       }
       ROS_INFO("Loading sample '%s'.", db_get_all_service.response.samples[i].id.c_str());
-      // Process image
+      // Process sample image (compute keypoints and descriptors)
       ObjectRecognizer::ImageInfo image_info;
       object_recognizer.getImageInfo(cv_ptr->image, image_info);
-      database_processed[db_get_all_service.response.samples[i].id].push_back(image_info);
-      // Create mipmaps
-      cv::Mat mipmap = cv_ptr->image.clone();
-      AlbumInfo::iterator it;
-      for(float j = 0; j < nof_mipmaps; j++)
-      {
-        cv::pyrDown(mipmap, mipmap);
-        // Process mipmap image (compute keypoints and descriptors)
-        object_recognizer.getImageInfo(mipmap, image_info);
-        it = database_processed[db_get_all_service.response.samples[i].id].begin();
-        database_processed[db_get_all_service.response.samples[i].id].insert(it, image_info);
-      }
+      database_processed[db_get_all_service.response.samples[i].id].first = image_info;
+      // Create mipmap image
+      cv::Mat sample_mipmap;
+      create_mipmap(cv_ptr->image, sample_mipmap, mipmap_level);
+      // Process mipmap image (compute keypoints and descriptors)
+      ObjectRecognizer::ImageInfo mipmap_info;
+      object_recognizer.getImageInfo(sample_mipmap, mipmap_info);
+      database_processed[db_get_all_service.response.samples[i].id].second = mipmap_info;
     }
   }
   else
@@ -343,7 +327,8 @@ int main(int argc, char** argv)
   // Spin
   ros::spin();
   // Free memory
-  cv::destroyWindow(DEBUG_IMAGE_WINDOW);
+  cv::destroyWindow(CAMERA_DEBUG_IMAGE_WINDOW);
+  cv::destroyWindow(MIPMAP_DEBUG_IMAGE_WINDOW);
   // Exit with success
   return 0;
 }

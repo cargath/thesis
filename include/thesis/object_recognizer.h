@@ -43,8 +43,8 @@ class ObjectRecognizer
 
   protected:
     // Reusable OpenCV stuff for working with images
-    cv::SurfFeatureDetector feature_detector;
-    cv::SurfDescriptorExtractor descriptor_extractor;
+    cv::SiftFeatureDetector feature_detector;
+    cv::SiftDescriptorExtractor descriptor_extractor;
 };
 
 #endif //__OBJECT_RECOGNIZER__
