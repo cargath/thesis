@@ -8,6 +8,7 @@
 
 FPSCalculator::FPSCalculator()
 {
+  ros::Time::init();
   frame_count = 0;
   fps_total   = 0;
   t_previous  = ros::Time::now().toSec();

@@ -108,8 +108,18 @@ void openni_callback(const Image::ConstPtr& rgb_input,
   // Draw keypoints to debug image
   cv::drawKeypoints(mipmap_debug_image, cam_img_mipmap_info.keypoints, mipmap_debug_image, BLUE);
   
-  // Recognize sample mipmaps on camera mipmap
+  //
+  typedef std::vector<cv::Point2f> Cluster2f;
+  typedef std::map<std::string, Cluster2f> Points2IDMap;
   
+  // Recognize sample mipmaps on camera mipmap
+  Points2IDMap mipmap_findings;
+  for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
+  {
+    Cluster2f object_points;
+    object_recognizer.recognize(it->second.second, cam_img_mipmap_info, object_points, &mipmap_debug_image);
+    mipmap_findings[it->first] = object_points;
+  }
   
   // Process camera image
   ObjectRecognizer::ImageInfo cam_img_info;
@@ -118,8 +128,6 @@ void openni_callback(const Image::ConstPtr& rgb_input,
   cv::drawKeypoints(camera_debug_image, cam_img_info.keypoints, camera_debug_image, BLUE);
   
   // Recognize objects
-  typedef std::vector<cv::Point2f> Cluster2f;
-  typedef std::map<std::string, Cluster2f> Points2IDMap;
   Points2IDMap findings;
   for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
   {
@@ -254,6 +262,7 @@ void openni_callback(const Image::ConstPtr& rgb_input,
   }
   // Update FPS calculator
   fps_calculator.update();
+  std::cout << "FPS: " << fps_calculator.get_fps() << std::endl;
   // Show debug image
   cv::imshow(CAMERA_DEBUG_IMAGE_WINDOW, camera_debug_image);
   cv::imshow(MIPMAP_DEBUG_IMAGE_WINDOW, mipmap_debug_image);
