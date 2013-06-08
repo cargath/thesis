@@ -35,9 +35,15 @@ using namespace sensor_msgs;
 #include <thesis/ObjectStamped.h>
 #include <tf/transform_datatypes.h>
 
+// FPS counter for debugging purposes
+#include <thesis/fps_calculator.h>
+
 // Debug image window
 static const std::string CAMERA_DEBUG_IMAGE_WINDOW = "Camera Debug Image";
 static const std::string MIPMAP_DEBUG_IMAGE_WINDOW = "Mipmap Debug Image";
+
+// FPS counter for debugging purposes
+FPSCalculator fps_calculator;
 
 // Number of mipmaps to create
 int mipmap_level;
@@ -246,6 +252,8 @@ void openni_callback(const Image::ConstPtr& rgb_input,
     // Publish message
     object_publisher.publish(msg);
   }
+  // Update FPS calculator
+  fps_calculator.update();
   // Show debug image
   cv::imshow(CAMERA_DEBUG_IMAGE_WINDOW, camera_debug_image);
   cv::imshow(MIPMAP_DEBUG_IMAGE_WINDOW, mipmap_debug_image);

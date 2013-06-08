@@ -24,6 +24,9 @@ rosbuild_gensrv()
 # Math library
 rosbuild_add_library(lib_math src/math2d.cpp)
 
+# FPS library
+rosbuild_add_library(lib_fps src/fps_calculator.cpp)
+
 # Object recognition library
 rosbuild_add_library(lib_recognition src/object_recognizer.cpp src/dbscan.cpp src/graham_scanner.cpp)
 
@@ -35,7 +38,7 @@ rosbuild_add_executable(init_database src/init_database.cpp src/image_loader.cpp
 
 # Node recognition
 rosbuild_add_executable(init_recognition src/init_recognition.cpp)
-target_link_libraries(init_recognition lib_math lib_recognition)
+target_link_libraries(init_recognition lib_math lib_fps lib_recognition)
 
 # Node semantic mapping
 rosbuild_add_executable(init_mapping src/init_mapping.cpp src/semantic_map.cpp)
