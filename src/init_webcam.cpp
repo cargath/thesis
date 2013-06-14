@@ -20,7 +20,7 @@ static const std::string DEBUG_IMAGE_WINDOW = "Debug Image";
 int main(int argc, char** argv)
 {
   // Initialize ROS
-  ros::init(argc, argv, "thesis_recognition");
+  ros::init(argc, argv, "thesis_webcam");
   ros::NodeHandle nh_private("~");
   // Initialize publishers
   ros::Publisher rgb_publisher = nh_private.advertise<sensor_msgs::Image>("rgb", 1000);;

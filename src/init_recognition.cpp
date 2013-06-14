@@ -108,7 +108,7 @@ void openni_callback(const Image::ConstPtr& rgb_input,
   // Draw keypoints to debug image
   cv::drawKeypoints(mipmap_debug_image, cam_img_mipmap_info.keypoints, mipmap_debug_image, BLUE);
   
-  //
+  // Abbreviations to keep the code clean
   typedef std::vector<cv::Point2f> Cluster2f;
   typedef std::map<std::string, Cluster2f> Points2IDMap;
   

@@ -5,7 +5,8 @@
 // This is a ROS project
 #include <ros/ros.h>
 
-// 
+// Since we use OpenCV to load image files,
+// we need to convert them to ROS messages
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
 
