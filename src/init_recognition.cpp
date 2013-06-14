@@ -114,11 +114,19 @@ void openni_callback(const Image::ConstPtr& rgb_input,
   
   // Recognize sample mipmaps on camera mipmap
   Points2IDMap mipmap_findings;
-  for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
+  if(mipmap_level > 0)
   {
-    Cluster2f object_points;
-    object_recognizer.recognize(it->second.second, cam_img_mipmap_info, object_points, &mipmap_debug_image);
-    mipmap_findings[it->first] = object_points;
+    for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
+    {
+      Cluster2f object_points;
+      object_recognizer.recognize(it->second.second, cam_img_mipmap_info, object_points, &mipmap_debug_image);
+      mipmap_findings[it->first] = object_points;
+    }
+    if(mipmap_findings.size() < 1)
+    {
+      std::cout << "Wenn diese Zeile zu lesen ist kann die Debug-Ausgabe gelöscht werden." << std::endl;
+      return;
+    }
   }
   
   // Process camera image
@@ -129,12 +137,25 @@ void openni_callback(const Image::ConstPtr& rgb_input,
   
   // Recognize objects
   Points2IDMap findings;
-  for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
+  if(mipmap_level > 0)
   {
-    Cluster2f object_points;
-    object_recognizer.recognize(it->second.first, cam_img_info, object_points, &camera_debug_image);
-    findings[it->first] = object_points;
+    for(Points2IDMap::iterator it = mipmap_findings.begin(); it != mipmap_findings.end(); it++)
+    {
+      Cluster2f object_points;
+      object_recognizer.recognize(database_processed[it->first].first, cam_img_info, object_points, &camera_debug_image);
+      findings[it->first] = object_points;
+    }
   }
+  else
+  {
+    for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
+    {
+      Cluster2f object_points;
+      object_recognizer.recognize(it->second.first, cam_img_info, object_points, &camera_debug_image);
+      findings[it->first] = object_points;
+    }
+  }
+  
   // Publish recognized objects
   camera_model.fromCameraInfo(cam_info_input);
   for(Points2IDMap::iterator it = findings.begin(); it != findings.end(); it++)
@@ -285,6 +306,7 @@ int main(int argc, char** argv)
     ROS_ERROR("Mipmap level (%i) out of bounds.", mipmap_level);
     return 1;
   }
+  ROS_INFO("Mipmap level: %i.", mipmap_level);
   // Create image database
   ros::ServiceClient db_get_all_client = nh.serviceClient<thesis::DatabaseGetAll>("thesis_database/get_all");
   thesis::DatabaseGetAll db_get_all_service;
