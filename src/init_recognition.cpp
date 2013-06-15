@@ -80,6 +80,9 @@ void openni_callback(const Image::ConstPtr& rgb_input,
                      const Image::ConstPtr& depth_input,
                      const CameraInfo::ConstPtr& cam_info_input)
 {
+  // Update FPS calculator
+  fps_calculator.update();
+  std::cout << "FPS: " << fps_calculator.get_fps() << std::endl;
   // Convert ROS images to OpenCV images
   cv_bridge::CvImagePtr cv_ptr_mono8,
                         cv_ptr_depth;
@@ -119,12 +122,17 @@ void openni_callback(const Image::ConstPtr& rgb_input,
     for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
     {
       Cluster2f object_points;
-      object_recognizer.recognize(it->second.second, cam_img_mipmap_info, object_points, &mipmap_debug_image);
-      mipmap_findings[it->first] = object_points;
+      if(object_recognizer.recognize(it->second.second, cam_img_mipmap_info, object_points, &mipmap_debug_image))
+      {
+        mipmap_findings[it->first] = object_points;
+      }
     }
     if(mipmap_findings.size() < 1)
     {
-      std::cout << "Wenn diese Zeile zu lesen ist kann die Debug-Ausgabe gelöscht werden." << std::endl;
+      // Show debug image
+      cv::imshow(CAMERA_DEBUG_IMAGE_WINDOW, camera_debug_image);
+      cv::imshow(MIPMAP_DEBUG_IMAGE_WINDOW, mipmap_debug_image);
+      cv::waitKey(3);
       return;
     }
   }
@@ -281,9 +289,6 @@ void openni_callback(const Image::ConstPtr& rgb_input,
     // Publish message
     object_publisher.publish(msg);
   }
-  // Update FPS calculator
-  fps_calculator.update();
-  std::cout << "FPS: " << fps_calculator.get_fps() << std::endl;
   // Show debug image
   cv::imshow(CAMERA_DEBUG_IMAGE_WINDOW, camera_debug_image);
   cv::imshow(MIPMAP_DEBUG_IMAGE_WINDOW, mipmap_debug_image);

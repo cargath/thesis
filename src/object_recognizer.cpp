@@ -34,17 +34,17 @@ void ObjectRecognizer::getImageInfo(const cv::Mat& image, ImageInfo& image_info)
   image_info.matcher.train();
 }
 
-void ObjectRecognizer::recognize(ImageInfo& sample_info,
+bool ObjectRecognizer::recognize(ImageInfo& sample_info,
                                  const cv::Mat& camera_image,
                                  std::vector<cv::Point2f>& object_points,
                                  cv::Mat* debug_image)
 {
   ImageInfo cam_img_info;
   getImageInfo(camera_image, cam_img_info);
-  recognize(sample_info, cam_img_info, object_points, debug_image);
+  return recognize(sample_info, cam_img_info, object_points, debug_image);
 }
 
-void ObjectRecognizer::recognize(ImageInfo& sample_info,
+bool ObjectRecognizer::recognize(ImageInfo& sample_info,
                                  ImageInfo& cam_img_info,
                                  std::vector<cv::Point2f>& object_points,
                                  cv::Mat* debug_image)
@@ -52,7 +52,7 @@ void ObjectRecognizer::recognize(ImageInfo& sample_info,
   // Otherwise an OpenCV assertion would fail for images without keypoints
   if(cam_img_info.descriptors.empty() || sample_info.descriptors.empty())
   {
-    return;
+    return false;
   }
   // Find the k = 2 nearest neighbours
   std::vector<std::vector<cv::DMatch> > matches;
@@ -95,7 +95,7 @@ void ObjectRecognizer::recognize(ImageInfo& sample_info,
     || (scene_corners[0].y < scene_corners[3].y && scene_corners[1].y > scene_corners[2].y)
     || (scene_corners[0].y > scene_corners[3].y && scene_corners[1].y < scene_corners[2].y))
     {
-      return;
+      return false;
     }
     // Filter false positives:
     // Check if set of scene points is convex
@@ -104,7 +104,7 @@ void ObjectRecognizer::recognize(ImageInfo& sample_info,
     GrahamScanner::grahamScan(scene_corners, convex_hull);
     if(convex_hull.size() < scene_corners.size())
     {
-      return;
+      return false;
     }
     // Add recognized object points to output
     object_points = scene_corners;
@@ -116,5 +116,11 @@ void ObjectRecognizer::recognize(ImageInfo& sample_info,
       line(*debug_image, scene_corners[2], scene_corners[3], GREEN);
       line(*debug_image, scene_corners[3], scene_corners[0], GREEN);
     }
+    // Success
+    return true;
+  }
+  else
+  {
+    return false;
   }
 }
