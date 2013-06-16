@@ -39,8 +39,8 @@ using namespace sensor_msgs;
 #include <thesis/fps_calculator.h>
 
 // Debug image window
-static const std::string CAMERA_DEBUG_IMAGE_WINDOW = "Camera Debug Image";
-static const std::string MIPMAP_DEBUG_IMAGE_WINDOW = "Mipmap Debug Image";
+#define CAMERA_DEBUG_IMAGE_WINDOW "Camera Debug Image"
+#define MIPMAP_DEBUG_IMAGE_WINDOW "Mipmap Debug Image"
 
 // FPS counter for debugging purposes
 FPSCalculator fps_calculator;
@@ -54,10 +54,15 @@ ros::Publisher object_publisher;
 // Reusable service clients
 ros::ServiceClient db_set_by_type_client;
 
+// Multiple points
+typedef std::vector<cv::Point2f> Cluster2f;
+// Map multiple points to the corresponding ID
+typedef std::map<std::string, Cluster2f> Points2IDMap;
 // A pair of ImageInfo (here used for a sample image and its mipmap)
 typedef std::pair<ObjectRecognizer::ImageInfo, ObjectRecognizer::ImageInfo> ImageInfoPair;
 // Map a sample image and its mipmap to the corresponding ID
 typedef std::map<std::string, ImageInfoPair> ProcessedDatabase;
+
 // The processed database of sample images
 ProcessedDatabase database_processed;
 
@@ -67,7 +72,7 @@ ObjectRecognizer object_recognizer;
 // Camera model used to convert pixels to camera coordinates
 image_geometry::PinholeCameraModel camera_model;
 
-void create_mipmap(const cv::Mat& image, cv::Mat& mipmap, unsigned int n)
+inline void create_mipmap(const cv::Mat& image, cv::Mat& mipmap, unsigned int n)
 {
   mipmap = image.clone();
   for(unsigned int i = 0; i < n; i++)
@@ -76,97 +81,13 @@ void create_mipmap(const cv::Mat& image, cv::Mat& mipmap, unsigned int n)
   }
 }
 
-void openni_callback(const Image::ConstPtr& rgb_input,
-                     const Image::ConstPtr& depth_input,
-                     const CameraInfo::ConstPtr& cam_info_input)
+inline void publish_objects(const Points2IDMap& findings,
+                            const cv::Mat& mono8_image,
+                            const cv::Mat1f& depth_image,
+                            const CameraInfo::ConstPtr& cam_info_input)
 {
-  // Update FPS calculator
-  fps_calculator.update();
-  std::cout << "FPS: " << fps_calculator.get_fps() << std::endl;
-  // Convert ROS images to OpenCV images
-  cv_bridge::CvImagePtr cv_ptr_mono8,
-                        cv_ptr_depth;
-  try
-  {
-    cv_ptr_mono8 = cv_bridge::toCvCopy(rgb_input,   image_encodings::MONO8);
-    cv_ptr_depth = cv_bridge::toCvCopy(depth_input, image_encodings::TYPE_32FC1);
-  }
-  catch (cv_bridge::Exception& e)
-  {
-    ROS_ERROR("cv_bridge exception: %s", e.what());
-    return;
-  }
-  // Create mipmap of camera image
-  cv::Mat cam_img_mipmap;
-  create_mipmap(cv_ptr_mono8->image, cam_img_mipmap, mipmap_level);
-  // Create copies to draw stuff on (for debugging purposes)
-  cv::Mat camera_debug_image = cv_ptr_mono8->image.clone(),
-          mipmap_debug_image = cam_img_mipmap.clone();
-  // Depth values are stored as 32bit float
-  cv::Mat1f depth_image(cv_ptr_depth->image);
-  
-  // Process the mipmap of the camera image
-  ObjectRecognizer::ImageInfo cam_img_mipmap_info;
-  object_recognizer.getImageInfo(cam_img_mipmap, cam_img_mipmap_info);
-  // Draw keypoints to debug image
-  cv::drawKeypoints(mipmap_debug_image, cam_img_mipmap_info.keypoints, mipmap_debug_image, BLUE);
-  
-  // Abbreviations to keep the code clean
-  typedef std::vector<cv::Point2f> Cluster2f;
-  typedef std::map<std::string, Cluster2f> Points2IDMap;
-  
-  // Recognize sample mipmaps on camera mipmap
-  Points2IDMap mipmap_findings;
-  if(mipmap_level > 0)
-  {
-    for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
-    {
-      Cluster2f object_points;
-      if(object_recognizer.recognize(it->second.second, cam_img_mipmap_info, object_points, &mipmap_debug_image))
-      {
-        mipmap_findings[it->first] = object_points;
-      }
-    }
-    if(mipmap_findings.size() < 1)
-    {
-      // Show debug image
-      cv::imshow(CAMERA_DEBUG_IMAGE_WINDOW, camera_debug_image);
-      cv::imshow(MIPMAP_DEBUG_IMAGE_WINDOW, mipmap_debug_image);
-      cv::waitKey(3);
-      return;
-    }
-  }
-  
-  // Process camera image
-  ObjectRecognizer::ImageInfo cam_img_info;
-  object_recognizer.getImageInfo(cv_ptr_mono8->image, cam_img_info);
-  // Draw keypoints to debug image
-  cv::drawKeypoints(camera_debug_image, cam_img_info.keypoints, camera_debug_image, BLUE);
-  
-  // Recognize objects
-  Points2IDMap findings;
-  if(mipmap_level > 0)
-  {
-    for(Points2IDMap::iterator it = mipmap_findings.begin(); it != mipmap_findings.end(); it++)
-    {
-      Cluster2f object_points;
-      object_recognizer.recognize(database_processed[it->first].first, cam_img_info, object_points, &camera_debug_image);
-      findings[it->first] = object_points;
-    }
-  }
-  else
-  {
-    for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
-    {
-      Cluster2f object_points;
-      object_recognizer.recognize(it->second.first, cam_img_info, object_points, &camera_debug_image);
-      findings[it->first] = object_points;
-    }
-  }
-  
-  // Publish recognized objects
   camera_model.fromCameraInfo(cam_info_input);
-  for(Points2IDMap::iterator it = findings.begin(); it != findings.end(); it++)
+  for(Points2IDMap::const_iterator it = findings.begin(); it != findings.end(); it++)
   {
     // Create new message
     thesis::ObjectStamped msg;
@@ -176,8 +97,8 @@ void openni_callback(const Image::ConstPtr& rgb_input,
     for(size_t i = 0; i < it->second.size(); i++)
     {
       // Check if point is located inside bounds of the image
-      if(!(it->second[i].x <  cv_ptr_mono8->image.cols
-        && it->second[i].y <  cv_ptr_mono8->image.rows
+      if(!(it->second[i].x <  mono8_image.cols
+        && it->second[i].y <  mono8_image.rows
         && it->second[i].x >= 0
         && it->second[i].y >= 0))
       {
@@ -269,13 +190,13 @@ void openni_callback(const Image::ConstPtr& rgb_input,
       // (camera pose - see below - might still be useful)
       msg.object_pose.header.stamp       = ros::Time(0);
       msg.object_pose.header.frame_id    = MAP_FRAME;
-      msg.object_pose.pose.position.x    = std::numeric_limits<float>::quiet_NaN();
-      msg.object_pose.pose.position.y    = std::numeric_limits<float>::quiet_NaN();
-      msg.object_pose.pose.position.z    = std::numeric_limits<float>::quiet_NaN();
-      msg.object_pose.pose.orientation.x = std::numeric_limits<float>::quiet_NaN();
-      msg.object_pose.pose.orientation.y = std::numeric_limits<float>::quiet_NaN();
-      msg.object_pose.pose.orientation.z = std::numeric_limits<float>::quiet_NaN();
-      msg.object_pose.pose.orientation.w = std::numeric_limits<float>::quiet_NaN();
+      msg.object_pose.pose.position.x    = NAN;
+      msg.object_pose.pose.position.y    = NAN;
+      msg.object_pose.pose.position.z    = NAN;
+      msg.object_pose.pose.orientation.x = NAN;
+      msg.object_pose.pose.orientation.y = NAN;
+      msg.object_pose.pose.orientation.z = NAN;
+      msg.object_pose.pose.orientation.w = NAN;
     }
     // Get camera angles
     cv::Point3f ypr_camera = xyz2ypr(cv::Point3f(0.0f, 0.0f, 1.0f));
@@ -289,6 +210,122 @@ void openni_callback(const Image::ConstPtr& rgb_input,
     // Publish message
     object_publisher.publish(msg);
   }
+}
+
+void callback_simple(const Image::ConstPtr& rgb_input,
+                     const Image::ConstPtr& depth_input,
+                     const CameraInfo::ConstPtr& cam_info_input)
+{
+  // Update FPS calculator
+  fps_calculator.update();
+  ROS_INFO("FPS: %i", fps_calculator.get_fps());
+  // Convert ROS images to OpenCV images
+  cv_bridge::CvImagePtr cv_ptr_mono8,
+                        cv_ptr_depth;
+  try
+  {
+    cv_ptr_mono8 = cv_bridge::toCvCopy(rgb_input,   image_encodings::MONO8);
+    cv_ptr_depth = cv_bridge::toCvCopy(depth_input, image_encodings::TYPE_32FC1);
+  }
+  catch (cv_bridge::Exception& e)
+  {
+    ROS_ERROR("cv_bridge exception: %s", e.what());
+    return;
+  }
+  // Create copy to draw stuff on (for debugging purposes)
+  cv::Mat camera_debug_image = cv_ptr_mono8->image.clone();
+  // Depth values are stored as 32bit float
+  cv::Mat1f depth_image = cv::Mat1f(cv_ptr_depth->image);
+  // Process camera image
+  ObjectRecognizer::ImageInfo cam_img_info;
+  object_recognizer.getImageInfo(cv_ptr_mono8->image, cam_img_info);
+  // Draw keypoints to debug image
+  cv::drawKeypoints(camera_debug_image, cam_img_info.keypoints, camera_debug_image, BLUE);
+  // Recognize objects
+  Points2IDMap findings;
+  for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
+  {
+    Cluster2f object_points;
+    if(object_recognizer.recognize(it->second.first, cam_img_info, object_points, &camera_debug_image))
+    {
+      findings[it->first] = object_points;
+    }
+  }
+  // Publish objects
+  publish_objects(findings, cv_ptr_mono8->image, depth_image, cam_info_input);
+  // Show debug image
+  cv::imshow(CAMERA_DEBUG_IMAGE_WINDOW, camera_debug_image);
+  cv::waitKey(3);
+}
+
+void callback_mipmapping(const Image::ConstPtr& rgb_input,
+                         const Image::ConstPtr& depth_input,
+                         const CameraInfo::ConstPtr& cam_info_input)
+{
+  // Update FPS calculator
+  fps_calculator.update();
+  ROS_INFO("FPS: %i", fps_calculator.get_fps());
+  // Convert ROS images to OpenCV images
+  cv_bridge::CvImagePtr cv_ptr_mono8,
+                        cv_ptr_depth;
+  try
+  {
+    cv_ptr_mono8 = cv_bridge::toCvCopy(rgb_input,   image_encodings::MONO8);
+    cv_ptr_depth = cv_bridge::toCvCopy(depth_input, image_encodings::TYPE_32FC1);
+  }
+  catch (cv_bridge::Exception& e)
+  {
+    ROS_ERROR("cv_bridge exception: %s", e.what());
+    return;
+  }
+  // Create mipmap of camera image
+  cv::Mat cam_img_mipmap;
+  create_mipmap(cv_ptr_mono8->image, cam_img_mipmap, mipmap_level);
+  // Create copies to draw stuff on (for debugging purposes)
+  cv::Mat camera_debug_image = cv_ptr_mono8->image.clone(),
+          mipmap_debug_image = cam_img_mipmap.clone();
+  // Depth values are stored as 32bit float
+  cv::Mat1f depth_image = cv::Mat1f(cv_ptr_depth->image);
+  // Process the mipmap of the camera image
+  ObjectRecognizer::ImageInfo cam_img_mipmap_info;
+  object_recognizer.getImageInfo(cam_img_mipmap, cam_img_mipmap_info);
+  // Draw keypoints to debug image
+  cv::drawKeypoints(mipmap_debug_image, cam_img_mipmap_info.keypoints, mipmap_debug_image, BLUE);
+  // Recognize sample mipmaps on camera mipmap
+  Points2IDMap mipmap_findings;
+  for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
+  {
+    Cluster2f object_points;
+    if(object_recognizer.recognize(it->second.second, cam_img_mipmap_info, object_points, &mipmap_debug_image))
+    {
+      mipmap_findings[it->first] = object_points;
+    }
+  }
+  if(mipmap_findings.size() < 1)
+  {
+    // Show debug image
+    cv::imshow(CAMERA_DEBUG_IMAGE_WINDOW, camera_debug_image);
+    cv::imshow(MIPMAP_DEBUG_IMAGE_WINDOW, mipmap_debug_image);
+    cv::waitKey(3);
+    return;
+  }
+  // Process camera image
+  ObjectRecognizer::ImageInfo cam_img_info;
+  object_recognizer.getImageInfo(cv_ptr_mono8->image, cam_img_info);
+  // Draw keypoints to debug image
+  cv::drawKeypoints(camera_debug_image, cam_img_info.keypoints, camera_debug_image, BLUE);
+  // Recognize objects
+  Points2IDMap findings;
+  for(Points2IDMap::iterator it = mipmap_findings.begin(); it != mipmap_findings.end(); it++)
+  {
+    Cluster2f object_points;
+    if(object_recognizer.recognize(database_processed[it->first].first, cam_img_info, object_points, &camera_debug_image))
+    {
+      findings[it->first] = object_points;
+    }
+  }
+  // Publish objects
+  publish_objects(findings, cv_ptr_mono8->image, depth_image, cam_info_input);
   // Show debug image
   cv::imshow(CAMERA_DEBUG_IMAGE_WINDOW, camera_debug_image);
   cv::imshow(MIPMAP_DEBUG_IMAGE_WINDOW, mipmap_debug_image);
@@ -365,7 +402,14 @@ int main(int argc, char** argv)
   // Use one time-sychronized callback for all subscriptions
   typedef sync_policies::ApproximateTime<Image, Image, CameraInfo> SyncPolicy;
   Synchronizer<SyncPolicy> synchronizer(SyncPolicy(10), rgb_subscriber, depth_subscriber, cam_info_subscriber);
-  synchronizer.registerCallback(boost::bind(&openni_callback, _1, _2, _3));
+  if(mipmap_level > 0)
+  {
+    synchronizer.registerCallback(boost::bind(&callback_mipmapping, _1, _2, _3));
+  }
+  else
+  {
+    synchronizer.registerCallback(boost::bind(&callback_simple, _1, _2, _3));
+  }
   // Publish recognized objects
   object_publisher = nh_private.advertise<thesis::ObjectStamped>("objects", 1000);
   // Spin
