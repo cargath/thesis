@@ -218,7 +218,7 @@ void callback_simple(const Image::ConstPtr& rgb_input,
 {
   // Update FPS calculator
   fps_calculator.update();
-  ROS_INFO("FPS: %i", fps_calculator.get_fps());
+  ROS_INFO("FPS: %f", fps_calculator.get_fps());
   // Convert ROS images to OpenCV images
   cv_bridge::CvImagePtr cv_ptr_mono8,
                         cv_ptr_depth;
@@ -264,7 +264,7 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
 {
   // Update FPS calculator
   fps_calculator.update();
-  ROS_INFO("FPS: %i", fps_calculator.get_fps());
+  ROS_INFO("FPS: %f", fps_calculator.get_fps());
   // Convert ROS images to OpenCV images
   cv_bridge::CvImagePtr cv_ptr_mono8,
                         cv_ptr_depth;

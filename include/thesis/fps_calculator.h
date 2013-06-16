@@ -17,7 +17,7 @@ class FPSCalculator
     ~FPSCalculator();
 
     // Return average number of fps over MAX_SAMPLES
-    int get_fps();
+    float get_fps();
 
     // Update FPS counter.
     // Call inside your main loop.

@@ -19,7 +19,7 @@ FPSCalculator::~FPSCalculator()
   // Default destructor
 }
 
-int FPSCalculator::get_fps()
+float FPSCalculator::get_fps()
 {
   return fps_total / fps_queue.size();
 }
