@@ -28,10 +28,7 @@ rosbuild_add_library(lib_math src/math2d.cpp)
 rosbuild_add_library(lib_fps src/fps_calculator.cpp)
 
 # Object recognition library
-rosbuild_add_library(lib_recognition src/object_recognizer.cpp src/dbscan.cpp src/graham_scanner.cpp)
-
-# Node webcam image publisher
-rosbuild_add_executable(init_webcam src/init_webcam.cpp)
+rosbuild_add_library(lib_recognition src/object_recognizer.cpp src/graham_scanner.cpp)
 
 # Node database
 rosbuild_add_executable(init_database src/init_database.cpp src/image_loader.cpp)
