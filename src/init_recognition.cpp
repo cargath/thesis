@@ -72,6 +72,24 @@ ObjectRecognizer object_recognizer;
 // Camera model used to convert pixels to camera coordinates
 image_geometry::PinholeCameraModel camera_model;
 
+inline bool draw_rectangle(const std::vector<cv::Point2f>& corners,
+                           const cv::Scalar& color,
+                           cv::Mat& debug_image)
+{
+  if(corners.size() == 4)
+  {
+    line(debug_image, corners[0], corners[1], color);
+    line(debug_image, corners[1], corners[2], color);
+    line(debug_image, corners[2], corners[3], color);
+    line(debug_image, corners[3], corners[0], color);
+    return true;
+  }
+  else
+  {
+    return false;
+  }
+}
+
 inline void create_mipmap(const cv::Mat& image, cv::Mat& mipmap, unsigned int n)
 {
   mipmap = image.clone();
@@ -246,9 +264,14 @@ void callback_simple(const Image::ConstPtr& rgb_input,
   for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
   {
     Cluster2f object_points;
-    if(object_recognizer.recognize(it->second.first, cam_img_info, object_points, &camera_debug_image))
+    if(object_recognizer.recognize(it->second.first, cam_img_info, object_points))
     {
+      draw_rectangle(object_points, GREEN, camera_debug_image);
       findings[it->first] = object_points;
+    }
+    else
+    {
+      draw_rectangle(object_points, RED, camera_debug_image);
     }
   }
   // Publish objects
@@ -296,9 +319,14 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
   for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
   {
     Cluster2f object_points;
-    if(object_recognizer.recognize(it->second.second, cam_img_mipmap_info, object_points, &mipmap_debug_image))
+    if(object_recognizer.recognize(it->second.second, cam_img_mipmap_info, object_points))
     {
+      draw_rectangle(object_points, GREEN, mipmap_debug_image);
       mipmap_findings[it->first] = object_points;
+    }
+    else
+    {
+      draw_rectangle(object_points, RED, mipmap_debug_image);
     }
   }
   if(mipmap_findings.size() < 1)
@@ -319,9 +347,14 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
   for(Points2IDMap::iterator it = mipmap_findings.begin(); it != mipmap_findings.end(); it++)
   {
     Cluster2f object_points;
-    if(object_recognizer.recognize(database_processed[it->first].first, cam_img_info, object_points, &camera_debug_image))
+    if(object_recognizer.recognize(database_processed[it->first].first, cam_img_info, object_points))
     {
+      draw_rectangle(object_points, GREEN, camera_debug_image);
       findings[it->first] = object_points;
+    }
+    else
+    {
+      draw_rectangle(object_points, RED, camera_debug_image);
     }
   }
   // Publish objects

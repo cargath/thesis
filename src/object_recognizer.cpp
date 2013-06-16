@@ -36,18 +36,16 @@ void ObjectRecognizer::getImageInfo(const cv::Mat& image, ImageInfo& image_info)
 
 bool ObjectRecognizer::recognize(ImageInfo& sample_info,
                                  const cv::Mat& camera_image,
-                                 std::vector<cv::Point2f>& object_points,
-                                 cv::Mat* debug_image)
+                                 std::vector<cv::Point2f>& object_points)
 {
   ImageInfo cam_img_info;
   getImageInfo(camera_image, cam_img_info);
-  return recognize(sample_info, cam_img_info, object_points, debug_image);
+  return recognize(sample_info, cam_img_info, object_points);
 }
 
 bool ObjectRecognizer::recognize(ImageInfo& sample_info,
                                  ImageInfo& cam_img_info,
-                                 std::vector<cv::Point2f>& object_points,
-                                 cv::Mat* debug_image)
+                                 std::vector<cv::Point2f>& object_points)
 {
   // Otherwise an OpenCV assertion would fail for images without keypoints
   if(cam_img_info.descriptors.empty() || sample_info.descriptors.empty())
@@ -88,6 +86,9 @@ bool ObjectRecognizer::recognize(ImageInfo& sample_info,
     object_corners[2] = cvPoint(sample_info.width, sample_info.height);
     object_corners[3] = cvPoint(                0, sample_info.height);
     cv::perspectiveTransform(object_corners, scene_corners, homography);
+    // Add object points to output before filtering false positives
+    // (we still might want to visualize them for debugging purposes)
+    object_points = scene_corners;
     // Filter false positives:
     // Check if object corners in scene are twisted
     if((scene_corners[0].x < scene_corners[1].x && scene_corners[3].x > scene_corners[2].x)
@@ -105,16 +106,6 @@ bool ObjectRecognizer::recognize(ImageInfo& sample_info,
     if(convex_hull.size() < scene_corners.size())
     {
       return false;
-    }
-    // Add recognized object points to output
-    object_points = scene_corners;
-    // Create debug image
-    if(debug_image)
-    {
-      line(*debug_image, scene_corners[0], scene_corners[1], GREEN);
-      line(*debug_image, scene_corners[1], scene_corners[2], GREEN);
-      line(*debug_image, scene_corners[2], scene_corners[3], GREEN);
-      line(*debug_image, scene_corners[3], scene_corners[0], GREEN);
     }
     // Success
     return true;

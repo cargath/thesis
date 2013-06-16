@@ -32,14 +32,12 @@ class ObjectRecognizer
     //
     bool recognize(ImageInfo& sample_info,
                    const cv::Mat& camera_image,
-                   std::vector<cv::Point2f>& object_points,
-                   cv::Mat* debug_image=NULL);
+                   std::vector<cv::Point2f>& object_points);
     
     //
     bool recognize(ImageInfo& sample_info,
                    ImageInfo& cam_img_info,
-                   std::vector<cv::Point2f>& object_points,
-                   cv::Mat* debug_image=NULL);
+                   std::vector<cv::Point2f>& object_points);
 
   protected:
     // Reusable OpenCV stuff for working with images
