@@ -6,7 +6,7 @@
 
 #include <queue>
 
-static const unsigned int MAX_SAMPLES = 100;
+static const unsigned int MAX_SAMPLES = 10;
 
 class FPSCalculator
 {
