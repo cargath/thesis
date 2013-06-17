@@ -238,10 +238,12 @@ void callback_simple(const Image::ConstPtr& rgb_input,
   fps_calculator.update();
   ROS_INFO("FPS: %f", fps_calculator.get_fps());
   // Convert ROS images to OpenCV images
-  cv_bridge::CvImagePtr cv_ptr_mono8,
+  cv_bridge::CvImagePtr cv_ptr_bgr8,
+                        cv_ptr_mono8,
                         cv_ptr_depth;
   try
   {
+    cv_ptr_bgr8  = cv_bridge::toCvCopy(rgb_input,   image_encodings::BGR8);
     cv_ptr_mono8 = cv_bridge::toCvCopy(rgb_input,   image_encodings::MONO8);
     cv_ptr_depth = cv_bridge::toCvCopy(depth_input, image_encodings::TYPE_32FC1);
   }
@@ -251,7 +253,7 @@ void callback_simple(const Image::ConstPtr& rgb_input,
     return;
   }
   // Create copy to draw stuff on (for debugging purposes)
-  cv::Mat camera_debug_image = cv_ptr_mono8->image.clone();
+  cv::Mat camera_debug_image = cv_ptr_bgr8->image.clone();
   // Depth values are stored as 32bit float
   cv::Mat1f depth_image = cv::Mat1f(cv_ptr_depth->image);
   // Process camera image
@@ -289,10 +291,12 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
   fps_calculator.update();
   ROS_INFO("FPS: %f", fps_calculator.get_fps());
   // Convert ROS images to OpenCV images
-  cv_bridge::CvImagePtr cv_ptr_mono8,
+  cv_bridge::CvImagePtr cv_ptr_bgr8,
+                        cv_ptr_mono8,
                         cv_ptr_depth;
   try
   {
+    cv_ptr_bgr8  = cv_bridge::toCvCopy(rgb_input,   image_encodings::BGR8);
     cv_ptr_mono8 = cv_bridge::toCvCopy(rgb_input,   image_encodings::MONO8);
     cv_ptr_depth = cv_bridge::toCvCopy(depth_input, image_encodings::TYPE_32FC1);
   }
@@ -305,8 +309,9 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
   cv::Mat cam_img_mipmap;
   create_mipmap(cv_ptr_mono8->image, cam_img_mipmap, mipmap_level);
   // Create copies to draw stuff on (for debugging purposes)
-  cv::Mat camera_debug_image = cv_ptr_mono8->image.clone(),
-          mipmap_debug_image = cam_img_mipmap.clone();
+  cv::Mat camera_debug_image = cv_ptr_bgr8->image.clone(),
+          mipmap_debug_image;
+  create_mipmap(cv_ptr_bgr8->image, mipmap_debug_image, mipmap_level);
   // Depth values are stored as 32bit float
   cv::Mat1f depth_image = cv::Mat1f(cv_ptr_depth->image);
   // Process the mipmap of the camera image
@@ -434,7 +439,7 @@ int main(int argc, char** argv)
   std::string rgb_topic,
               depth_topic,
               cam_info_topic;
-  nh.param("rgb_topic", rgb_topic, std::string("camera/rgb/image_rect"));
+  nh.param("rgb_topic", rgb_topic, std::string("camera/rgb/image_rect_color"));
   nh.param("depth_topic", depth_topic, std::string("camera/depth_registered/image_rect"));
   nh.param("cam_info_topic", cam_info_topic, std::string("camera/depth_registered/camera_info"));
   // Subscribe to relevant topics
