@@ -60,6 +60,15 @@ inline float dir2angle(float x, float y)
   return atan(y / x);
 }
 
-bool intersect(cv::Vec4i a, cv::Vec4i b, cv::Point& intersection);
+bool insideConvexPolygon(const std::vector<cv::Point2f>& corners,
+                         const cv::Point2f& p);
+
+bool intersectLines(cv::Point2f a1, cv::Point2f a2,
+                    cv::Point2f b1, cv::Point2f b2,
+                    cv::Point2f& intersection);
+
+bool intersectLineSegments(cv::Point2f a1, cv::Point2f a2,
+                           cv::Point2f b1, cv::Point2f b2,
+                           cv::Point2f& intersection);
 
 #endif //__MATH2D__

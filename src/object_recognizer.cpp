@@ -20,29 +20,9 @@ ObjectRecognizer::~ObjectRecognizer()
   // Default destructor
 }
 
-/**
- * @return true if p is located inside the convex polygon defined by the given corners,
- *         false otherwise.
- */
-inline bool insideConvexPolygon(const std::vector<cv::Point2f>& corners,
-                                const cv::Point2f& p)
+inline bool x0r(bool a, bool b)
 {
-  bool result = true;
-  for(size_t i = 0; i < corners.size(); i++)
-  {
-    unsigned int j = i + 1;
-    if(j >= corners.size())
-    {
-      j = 0;
-    }
-    // det2f() is > 0, if C is left of AB
-    if(!(det2f(corners[i], corners[j], p) > 0))
-    {
-      result = false;
-      break;
-    }
-  }
-  return result;
+  return (a && !b) || (b && !a);
 }
 
 void ObjectRecognizer::getImageInfo(const cv::Mat& image,
@@ -149,10 +129,13 @@ bool ObjectRecognizer::recognize(ImageInfo& sample_info,
     object_points = scene_corners;
     // Filter false positives:
     // Check if object corners in scene are twisted
-    if((scene_corners[0].x < scene_corners[1].x && scene_corners[3].x > scene_corners[2].x)
-    || (scene_corners[0].x > scene_corners[1].x && scene_corners[3].x < scene_corners[2].x)
-    || (scene_corners[0].y < scene_corners[3].y && scene_corners[1].y > scene_corners[2].y)
-    || (scene_corners[0].y > scene_corners[3].y && scene_corners[1].y < scene_corners[2].y))
+    #define p0 scene_corners[0]
+    #define p1 scene_corners[1]
+    #define p2 scene_corners[2]
+    #define p3 scene_corners[3]
+    cv::Point2f intersection;
+    if(intersectLineSegments(p0, p1, p2, p3, intersection)
+    || intersectLineSegments(p0, p3, p1, p2, intersection))
     {
       return false;
     }

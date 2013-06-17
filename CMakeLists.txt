@@ -29,6 +29,7 @@ rosbuild_add_library(lib_fps src/fps_calculator.cpp)
 
 # Object recognition library
 rosbuild_add_library(lib_recognition src/object_recognizer.cpp src/graham_scanner.cpp)
+target_link_libraries(lib_recognition lib_math)
 
 # Node database
 rosbuild_add_executable(init_database src/init_database.cpp src/image_loader.cpp)

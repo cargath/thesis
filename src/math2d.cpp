@@ -4,20 +4,68 @@
 
 #include <thesis/math2d.h>
 
-bool intersect(cv::Vec4i a, cv::Vec4i b, cv::Point& intersection)
+using namespace std;
+
+bool insideConvexPolygon(const std::vector<cv::Point2f>& corners,
+                         const cv::Point2f& p)
 {
-  cv::Point da = cv::Point(a[2] - a[0], a[3] - a[1]);
-  cv::Point db = cv::Point(b[2] - b[0], b[3] - b[1]);
-  double d = cross2f(da, db);
+  bool result = true;
+  for(size_t i = 0; i < corners.size(); i++)
+  {
+    unsigned int j = i + 1;
+    if(j >= corners.size())
+    {
+      j = 0;
+    }
+    // det2f() is > 0, if C is left of AB
+    if(!(det2f(corners[i], corners[j], p) > 0))
+    {
+      result = false;
+      break;
+    }
+  }
+  return result;
+}
+
+bool intersectLines(cv::Point2f a1, cv::Point2f a2,
+                    cv::Point2f b1, cv::Point2f b2,
+                    cv::Point2f& intersection)
+{
+  cv::Point2f da = cv::Point(a2.x - a1.x, a2.y - a1.y);
+  cv::Point2f db = cv::Point(b2.x - b1.x, b2.y - b1.y);
+  float d = cross2f(da, db);
   // Lines are not parallel, compute intersection
   if(d != 0)
   {
-    double temp = cross2f(cv::Point(b[0] - a[0], b[1] - a[1]), da) / d;
-    intersection.x = db.x*temp + b[0];
-    intersection.y = db.y*temp + b[1];
+    float temp = cross2f(b1 - a1, da) / d;
+    intersection = db * temp + b1;
     return true;
   }
   // Lines are parallel, they do not intersect
+  else
+  {
+    return false;
+  }
+}
+
+bool intersectLineSegments(cv::Point2f a1, cv::Point2f a2,
+                           cv::Point2f b1, cv::Point2f b2,
+                           cv::Point2f& intersection)
+{
+  if(intersectLines(a1, a2, b1, b2, intersection))
+  {
+    if(intersection.x <= max(a1.x, a2.x) && intersection.x >= min(a1.x, a2.x)
+    && intersection.y <= max(a1.y, a2.y) && intersection.y >= min(a1.y, a2.y)
+    && intersection.x <= max(b1.x, b2.x) && intersection.x >= min(b1.x, b2.x)
+    && intersection.y <= max(b1.y, b2.y) && intersection.y >= min(b1.y, b2.y))
+    {
+      return true;
+    }
+    else
+    {
+      return false;
+    }
+  }
   else
   {
     return false;
