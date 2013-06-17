@@ -27,7 +27,14 @@ class ObjectRecognizer
     ~ObjectRecognizer();
 
     // Process a sample image (compute keypoints and descriptors)
-    void getImageInfo(const cv::Mat& image, ImageInfo& image_info);
+    void getImageInfo(const cv::Mat& image,
+                      ImageInfo& image_info,
+                      std::vector<cv::KeyPoint>* keypoints=NULL);
+    
+    // Process a rectangular area of an image given by four corner points
+    void getPartialImageInfo(const cv::Mat& image,
+                             const std::vector<cv::Point2f>& corners,
+                             ImageInfo& image_info);
     
     //
     bool recognize(ImageInfo& sample_info,

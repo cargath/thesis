@@ -6,6 +6,7 @@
 
 #include <thesis/clock.h>
 #include <thesis/graham_scanner.h>
+#include <thesis/math2d.h>
 
 #include <opencv2/flann/flann.hpp>
 
@@ -19,19 +20,76 @@ ObjectRecognizer::~ObjectRecognizer()
   // Default destructor
 }
 
-void ObjectRecognizer::getImageInfo(const cv::Mat& image, ImageInfo& image_info)
+/**
+ * @return true if p is located inside the convex polygon defined by the given corners,
+ *         false otherwise.
+ */
+inline bool insideConvexPolygon(const std::vector<cv::Point2f>& corners,
+                                const cv::Point2f& p)
+{
+  bool result = true;
+  for(size_t i = 0; i < corners.size(); i++)
+  {
+    unsigned int j = i + 1;
+    if(j >= corners.size())
+    {
+      j = 0;
+    }
+    // det2f() is > 0, if C is left of AB
+    if(!(det2f(corners[i], corners[j], p) > 0))
+    {
+      result = false;
+      break;
+    }
+  }
+  return result;
+}
+
+void ObjectRecognizer::getImageInfo(const cv::Mat& image,
+                                    ImageInfo& image_info,
+                                    std::vector<cv::KeyPoint>* keypoints)
 {
   image_info.width  = image.cols;
   image_info.height = image.rows;
   // Detect keypoints
-  feature_detector.detect(image, image_info.keypoints);
+  if(keypoints)
+  {
+    image_info.keypoints = *keypoints;
+  }
+  else
+  {
+    feature_detector.detect(image, image_info.keypoints);
+  }
   // Compute descriptors
   descriptor_extractor.compute(image, image_info.keypoints, image_info.descriptors);
   // Train matcher
-  std::vector<cv::Mat> descriptor_vector;
-  descriptor_vector.push_back(image_info.descriptors);
-  image_info.matcher.add(descriptor_vector);
-  image_info.matcher.train();
+  if(!image_info.descriptors.empty())
+  {
+    std::vector<cv::Mat> descriptor_vector;
+    descriptor_vector.push_back(image_info.descriptors);
+    image_info.matcher.add(descriptor_vector);
+    image_info.matcher.train();
+  }
+}
+
+void ObjectRecognizer::getPartialImageInfo(const cv::Mat& image,
+                                           const std::vector<cv::Point2f>& corners,
+                                           ImageInfo& image_info)
+{
+  // Detect all keypoints
+  std::vector<cv::KeyPoint> keypoints;
+  feature_detector.detect(image, keypoints);
+  // Only use keypoints located inside the rectangle defined by the given corners
+  std::vector<cv::KeyPoint> keypoints_filtered;
+  for(size_t i = 0; i < keypoints.size(); i++)
+  {
+    if(insideConvexPolygon(corners, keypoints[i].pt))
+    {
+      keypoints_filtered.push_back(keypoints[i]);
+    }
+  }
+  // Return image info for all applicable keypoints
+  getImageInfo(image, image_info, &keypoints_filtered);
 }
 
 bool ObjectRecognizer::recognize(ImageInfo& sample_info,

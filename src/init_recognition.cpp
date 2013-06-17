@@ -337,16 +337,25 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
     cv::waitKey(3);
     return;
   }
-  // Process camera image
-  ObjectRecognizer::ImageInfo cam_img_info;
-  object_recognizer.getImageInfo(cv_ptr_mono8->image, cam_img_info);
-  // Draw keypoints to debug image
-  cv::drawKeypoints(camera_debug_image, cam_img_info.keypoints, camera_debug_image, BLUE);
   // Recognize objects
   Points2IDMap findings;
+  double scale = pow(2, mipmap_level);
   for(Points2IDMap::iterator it = mipmap_findings.begin(); it != mipmap_findings.end(); it++)
   {
     Cluster2f object_points;
+    // Scale points found on the mipmap image back to original size
+    it->second[0] = it->second[0] * scale,
+    it->second[1] = it->second[1] * scale,
+    it->second[2] = it->second[2] * scale,
+    it->second[3] = it->second[3] * scale;
+    // Process only the part of the camera image
+    // belonging to the area defined by the points we found on the mipmap image
+    ObjectRecognizer::ImageInfo cam_img_info;
+    object_recognizer.getPartialImageInfo(cv_ptr_mono8->image, it->second, cam_img_info);
+    // Debug drawings
+    draw_rectangle(it->second, YELLOW, camera_debug_image);
+    cv::drawKeypoints(camera_debug_image, cam_img_info.keypoints, camera_debug_image, BLUE);
+    // Apply object recognizer to the previously processed part of the camera image
     if(object_recognizer.recognize(database_processed[it->first].first, cam_img_info, object_points))
     {
       draw_rectangle(object_points, GREEN, camera_debug_image);

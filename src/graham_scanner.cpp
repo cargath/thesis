@@ -4,42 +4,15 @@
 
 #include <thesis/graham_scanner.h>
 
-static const double RAD = 180.0/CV_PI;
+#include <thesis/math2d.h>
 
 cv::Point2f GrahamScanner::p0;
-
-/**
- * @return Angle between a->b and the x-axis in degrees (0 - 180).
- */
-static inline float angle(const cv::Point2f& a, const cv::Point2f& b)
-{
-  if(b.x == a.x)
-  {
-    return 90.0f;
-  }
-  float m = (b.y - a.y) / (b.x - a.x);
-  if(m < 0)
-  {
-    return 180 + atan(m) * RAD;
-  }
-  return atan(m) * RAD;
-}
-
-/**
- * @return < 0, if C is right of AB
- *         = 0, if C is on AB
- *         > 0, if C is left of AB
- */
-static inline float det(const cv::Point2f& a, const cv::Point2f& b, const cv::Point2f& c)
-{
-  return (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
-}
 
 struct grahamScanComparator
 {
   bool operator() (const cv::Point2f& a, const cv::Point2f& b)
   {
-    return angle(GrahamScanner::p0, a) < angle(GrahamScanner::p0, b);
+    return angle2f(GrahamScanner::p0, a) < angle2f(GrahamScanner::p0, b);
   }
 };
 
@@ -70,7 +43,11 @@ void GrahamScanner::grahamScan(std::vector<cv::Point2f>& input, std::vector<cv::
   output.push_back(nonP0[0]);
   for(size_t i = 1; i < nonP0.size() && output.size() > 1; )
   {
-    if(det(output[output.size()-2], output.back(), nonP0[i]) > 0)
+    // det2f() is
+    // < 0, if C is right of AB
+    // = 0, if C is on AB
+    // > 0, if C is left of AB
+    if(det2f(output[output.size()-2], output.back(), nonP0[i]) > 0)
     {
       output.push_back(nonP0[i]);
       i++;
