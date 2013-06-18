@@ -12,6 +12,7 @@
 
 // Local headers
 #include <thesis/config.h>
+#include <thesis/math2d.h>
 #include <thesis/math3d.h>
 #include <thesis/object_recognizer.h>
 
@@ -41,6 +42,10 @@ using namespace sensor_msgs;
 // Debug image window
 #define CAMERA_DEBUG_IMAGE_WINDOW "Camera Debug Image"
 #define MIPMAP_DEBUG_IMAGE_WINDOW "Mipmap Debug Image"
+
+// Constants
+static const unsigned int MAX_OBJECTS_PER_FRAME = 5;
+static const          int DEFAULT_MIPMAP_LEVEL  = 1;
 
 // FPS counter for debugging purposes
 FPSCalculator fps_calculator;
@@ -266,15 +271,36 @@ void callback_simple(const Image::ConstPtr& rgb_input,
   for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
   {
     Cluster2f object_points;
-    if(object_recognizer.recognize(it->second.first, cam_img_info, object_points))
+    // Copy image info, because we are going to modify it
+    ObjectRecognizer::ImageInfo temp_image_info;
+    object_recognizer.copyImageInfo(cam_img_info, temp_image_info);
+    // Search for an object until we don't find any more occurrences
+    unsigned int loops = 0;
+    while(loops <= MAX_OBJECTS_PER_FRAME
+          && object_recognizer.recognize(it->second.first, cam_img_info, object_points))
     {
+      loops++;
+      // Visualize result
       draw_rectangle(object_points, GREEN, camera_debug_image);
+      //
       findings[it->first] = object_points;
+      // Remove keypoints belonging to this object from image info,
+      // in order to search for other object of the same type
+      std::vector<cv::KeyPoint> keypoints_filtered;
+      for(size_t i = 0; i < temp_image_info.keypoints.size(); i++)
+      {
+        if(!insideConvexPolygon(object_points, temp_image_info.keypoints[i].pt))
+        {
+          keypoints_filtered.push_back(temp_image_info.keypoints[i]);
+        }
+      }
+      cv::drawKeypoints(camera_debug_image, keypoints_filtered, camera_debug_image, YELLOW);
+      object_recognizer.getImageInfo(cv_ptr_mono8->image, temp_image_info, &keypoints_filtered);
+      // Start next search with an empty vector again
+      object_points.clear();
     }
-    else
-    {
-      draw_rectangle(object_points, RED, camera_debug_image);
-    }
+    // Draw result one last time in order to visualize false positives
+    draw_rectangle(object_points, RED, camera_debug_image);
   }
   // Publish objects
   publish_objects(findings, cv_ptr_mono8->image, depth_image, cam_info_input);
@@ -324,15 +350,36 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
   for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
   {
     Cluster2f object_points;
-    if(object_recognizer.recognize(it->second.second, cam_img_mipmap_info, object_points))
+    // Copy image info, because we are going to modify it
+    ObjectRecognizer::ImageInfo temp_image_info;
+    object_recognizer.copyImageInfo(cam_img_mipmap_info, temp_image_info);
+    // Search for an object until we don't find any more occurrences
+    unsigned int loops = 0;
+    while(loops <= MAX_OBJECTS_PER_FRAME
+          && object_recognizer.recognize(it->second.second, temp_image_info, object_points))
     {
+      loops++;
+      // Visualize result
       draw_rectangle(object_points, GREEN, mipmap_debug_image);
+      // We want to search for this candidate in the original camera image for higher precision
       mipmap_findings[it->first] = object_points;
+      // Remove keypoints belonging to this candidate from image info,
+      // in order to search for other candidates of the same type
+      std::vector<cv::KeyPoint> keypoints_filtered;
+      for(size_t i = 0; i < temp_image_info.keypoints.size(); i++)
+      {
+        if(!insideConvexPolygon(object_points, temp_image_info.keypoints[i].pt))
+        {
+          keypoints_filtered.push_back(temp_image_info.keypoints[i]);
+        }
+      }
+      cv::drawKeypoints(mipmap_debug_image, keypoints_filtered, mipmap_debug_image, YELLOW);
+      object_recognizer.getImageInfo(cam_img_mipmap, temp_image_info, &keypoints_filtered);
+      // Start next search with an empty vector again
+      object_points.clear();
     }
-    else
-    {
-      draw_rectangle(object_points, RED, mipmap_debug_image);
-    }
+    // Draw result one last time in order to visualize false positives
+    draw_rectangle(object_points, RED, mipmap_debug_image);
   }
   if(mipmap_findings.size() < 1)
   {
@@ -389,7 +436,7 @@ int main(int argc, char** argv)
   cv::namedWindow(CAMERA_DEBUG_IMAGE_WINDOW);
   cv::namedWindow(MIPMAP_DEBUG_IMAGE_WINDOW);
   // Get number of mipmaps from parameter server
-  nh.param("mipmap_level", mipmap_level, 1);
+  nh.param("mipmap_level", mipmap_level, DEFAULT_MIPMAP_LEVEL);
   if(mipmap_level < 0)
   {
     ROS_ERROR("Mipmap level (%i) out of bounds.", mipmap_level);

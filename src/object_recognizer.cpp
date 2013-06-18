@@ -47,6 +47,7 @@ void ObjectRecognizer::getImageInfo(const cv::Mat& image,
   {
     std::vector<cv::Mat> descriptor_vector;
     descriptor_vector.push_back(image_info.descriptors);
+    image_info.matcher.clear();
     image_info.matcher.add(descriptor_vector);
     image_info.matcher.train();
   }
@@ -72,13 +73,13 @@ void ObjectRecognizer::getPartialImageInfo(const cv::Mat& image,
   getImageInfo(image, image_info, &keypoints_filtered);
 }
 
-bool ObjectRecognizer::recognize(ImageInfo& sample_info,
-                                 const cv::Mat& camera_image,
-                                 std::vector<cv::Point2f>& object_points)
+void ObjectRecognizer::copyImageInfo(const ImageInfo& from, ImageInfo& to)
 {
-  ImageInfo cam_img_info;
-  getImageInfo(camera_image, cam_img_info);
-  return recognize(sample_info, cam_img_info, object_points);
+  to.width       = from.width;
+  to.height      = from.height;
+  to.keypoints   = from.keypoints;
+  to.descriptors = from.descriptors;
+  to.matcher     = from.matcher;
 }
 
 bool ObjectRecognizer::recognize(ImageInfo& sample_info,

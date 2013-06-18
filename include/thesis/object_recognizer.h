@@ -37,9 +37,7 @@ class ObjectRecognizer
                              ImageInfo& image_info);
     
     //
-    bool recognize(ImageInfo& sample_info,
-                   const cv::Mat& camera_image,
-                   std::vector<cv::Point2f>& object_points);
+    void copyImageInfo(const ImageInfo& from, ImageInfo& to);
     
     //
     bool recognize(ImageInfo& sample_info,
