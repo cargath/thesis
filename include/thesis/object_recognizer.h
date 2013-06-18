@@ -26,15 +26,29 @@ class ObjectRecognizer
     // Default destructor
     ~ObjectRecognizer();
 
+    // Use the object recognizers feature detector to compute keypoints.
+    // Call this method if you want to make sure to get compatible keypoints.
+    void getKeypoints(const cv::Mat& image,
+                      std::vector<cv::KeyPoint>& keypoints);
+    
+    // Use the object recognizers descriptor extractor to compute descriptors.
+    // Call this method if you want to make sure to get compatible descriptors.
+    void getDescriptors(const cv::Mat& image,
+                        std::vector<cv::KeyPoint>& keypoints,
+                        cv::Mat& descriptors);
+
     // Process a sample image (compute keypoints and descriptors)
     void getImageInfo(const cv::Mat& image,
                       ImageInfo& image_info,
-                      std::vector<cv::KeyPoint>* keypoints=NULL);
+                      std::vector<cv::KeyPoint>* keypoints=NULL,
+                      cv::Mat* descriptors=NULL);
     
     // Process a rectangular area of an image given by four corner points
     void getPartialImageInfo(const cv::Mat& image,
                              const std::vector<cv::Point2f>& corners,
-                             ImageInfo& image_info);
+                             ImageInfo& image_info,
+                             std::vector<cv::KeyPoint>* keypoints=NULL,
+                             cv::Mat* descriptors=NULL);
     
     //
     void copyImageInfo(const ImageInfo& from, ImageInfo& to);

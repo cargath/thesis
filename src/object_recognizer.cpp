@@ -25,9 +25,23 @@ inline bool x0r(bool a, bool b)
   return (a && !b) || (b && !a);
 }
 
+void ObjectRecognizer::getKeypoints(const cv::Mat& image,
+                                    std::vector<cv::KeyPoint>& keypoints)
+{
+  feature_detector.detect(image, keypoints);
+}
+
+void ObjectRecognizer::getDescriptors(const cv::Mat& image,
+                                      std::vector<cv::KeyPoint>& keypoints,
+                                      cv::Mat& descriptors)
+{
+  descriptor_extractor.compute(image, keypoints, descriptors);
+}
+
 void ObjectRecognizer::getImageInfo(const cv::Mat& image,
                                     ImageInfo& image_info,
-                                    std::vector<cv::KeyPoint>* keypoints)
+                                    std::vector<cv::KeyPoint>* keypoints,
+                                    cv::Mat* descriptors)
 {
   image_info.width  = image.cols;
   image_info.height = image.rows;
@@ -41,7 +55,14 @@ void ObjectRecognizer::getImageInfo(const cv::Mat& image,
     feature_detector.detect(image, image_info.keypoints);
   }
   // Compute descriptors
-  descriptor_extractor.compute(image, image_info.keypoints, image_info.descriptors);
+  if(descriptors)
+  {
+    image_info.descriptors = *descriptors;
+  }
+  else
+  {
+    descriptor_extractor.compute(image, image_info.keypoints, image_info.descriptors);
+  }
   // Train matcher
   if(!image_info.descriptors.empty())
   {
@@ -55,22 +76,43 @@ void ObjectRecognizer::getImageInfo(const cv::Mat& image,
 
 void ObjectRecognizer::getPartialImageInfo(const cv::Mat& image,
                                            const std::vector<cv::Point2f>& corners,
-                                           ImageInfo& image_info)
+                                           ImageInfo& image_info,
+                                           std::vector<cv::KeyPoint>* keypoints,
+                                           cv::Mat* descriptors)
 {
-  // Detect all keypoints
-  std::vector<cv::KeyPoint> keypoints;
-  feature_detector.detect(image, keypoints);
+  // Detect all keypoints (if none are given)
+  std::vector<cv::KeyPoint> keypoints_all;
+  if(keypoints)
+  {
+    keypoints_all = *keypoints;
+  }
+  else
+  {
+    feature_detector.detect(image, keypoints_all);
+  }
   // Only use keypoints located inside the rectangle defined by the given corners
   std::vector<cv::KeyPoint> keypoints_filtered;
-  for(size_t i = 0; i < keypoints.size(); i++)
+  cv::Mat descriptors_filtered;
+  for(size_t i = 0; i < keypoints_all.size(); i++)
   {
-    if(insideConvexPolygon(corners, keypoints[i].pt))
+    if(insideConvexPolygon(corners, keypoints_all[i].pt))
     {
-      keypoints_filtered.push_back(keypoints[i]);
+      keypoints_filtered.push_back(keypoints_all[i]);
+      if(descriptors)
+      {
+        descriptors_filtered.push_back(descriptors->row(i));
+      }
     }
   }
   // Return image info for all applicable keypoints
-  getImageInfo(image, image_info, &keypoints_filtered);
+  if(descriptors)
+  {
+    getImageInfo(image, image_info, &keypoints_filtered, &descriptors_filtered);
+  }
+  else
+  {
+    getImageInfo(image, image_info, &keypoints_filtered);
+  }
 }
 
 void ObjectRecognizer::copyImageInfo(const ImageInfo& from, ImageInfo& to)

@@ -392,6 +392,11 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
     cv::waitKey(3);
     return;
   }
+  // Compute keypoints and descriptors for the original camera image
+  std::vector<cv::KeyPoint> camera_image_keypoints;
+  object_recognizer.getKeypoints(cv_ptr_mono8->image, camera_image_keypoints);
+  cv::Mat camera_image_descriptors;
+  object_recognizer.getDescriptors(cv_ptr_mono8->image, camera_image_keypoints, camera_image_descriptors);
   // Recognize objects
   std::vector<IDClusterPair> findings;
   double scale = pow(2, mipmap_level);
@@ -406,7 +411,7 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
     // Process only the part of the camera image
     // belonging to the area defined by the points we found on the mipmap image
     ObjectRecognizer::ImageInfo cam_img_info;
-    object_recognizer.getPartialImageInfo(cv_ptr_mono8->image, it->second, cam_img_info);
+    object_recognizer.getPartialImageInfo(cv_ptr_mono8->image, it->second, cam_img_info, &camera_image_keypoints, &camera_image_descriptors);
     // Debug drawings
     draw_rectangle(it->second, YELLOW, camera_debug_image);
     cv::drawKeypoints(camera_debug_image, cam_img_info.keypoints, camera_debug_image, BLUE);
