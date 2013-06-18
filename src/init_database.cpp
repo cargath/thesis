@@ -111,18 +111,18 @@ int main(int argc, char** argv)
     if(images[i].cols > max_image_size.width || images[i].rows > max_image_size.height)
     {
       // ...determine biggest possible new size with the same aspect ratio
-      cv::Size re_size      = cv::Size(images[i].cols, images[i].rows),
-               aspect_ratio = cv::Size(max_image_size.width  / images[i].cols,
-                                       max_image_size.height / images[i].rows);
-      if(aspect_ratio.width < aspect_ratio.height)
+      cv::Size re_size;
+      float aspect_ratio_width  = (float) max_image_size.width  / (float) images[i].cols,
+            aspect_ratio_height = (float) max_image_size.height / (float) images[i].rows;
+      if(aspect_ratio_width < aspect_ratio_height)
       {
-        re_size = cv::Size(images[i].cols * aspect_ratio.width,
-                           images[i].rows * aspect_ratio.width);
+        re_size = cv::Size(images[i].cols * aspect_ratio_width,
+                           images[i].rows * aspect_ratio_width);
       }
       else
       {
-        re_size = cv::Size(images[i].cols * aspect_ratio.height,
-                           images[i].rows * aspect_ratio.height);
+        re_size = cv::Size(images[i].cols * aspect_ratio_height,
+                           images[i].rows * aspect_ratio_height);
       }
       // ...and resize it accordingly
       ROS_WARN("Image '%s' is bigger than %i x %i.", filenames[i].c_str(), max_image_size.width, max_image_size.height);
