@@ -61,8 +61,11 @@ ros::ServiceClient db_set_by_type_client;
 
 // Multiple points
 typedef std::vector<cv::Point2f> Cluster2f;
+// The corner points of an object in the camera image and the ID of this object
+typedef std::pair<std::string, Cluster2f> IDClusterPair;
 // Map multiple points to the corresponding ID
 typedef std::map<std::string, Cluster2f> Points2IDMap;
+
 // A pair of ImageInfo (here used for a sample image and its mipmap)
 typedef std::pair<ObjectRecognizer::ImageInfo, ObjectRecognizer::ImageInfo> ImageInfoPair;
 // Map a sample image and its mipmap to the corresponding ID
@@ -104,13 +107,13 @@ inline void create_mipmap(const cv::Mat& image, cv::Mat& mipmap, unsigned int n)
   }
 }
 
-inline void publish_objects(const Points2IDMap& findings,
+inline void publish_objects(const std::vector<IDClusterPair>& findings,
                             const cv::Mat& mono8_image,
                             const cv::Mat1f& depth_image,
                             const CameraInfo::ConstPtr& cam_info_input)
 {
   camera_model.fromCameraInfo(cam_info_input);
-  for(Points2IDMap::const_iterator it = findings.begin(); it != findings.end(); it++)
+  for(std::vector<IDClusterPair>::const_iterator it = findings.begin(); it != findings.end(); it++)
   {
     // Create new message
     thesis::ObjectStamped msg;
@@ -267,7 +270,7 @@ void callback_simple(const Image::ConstPtr& rgb_input,
   // Draw keypoints to debug image
   cv::drawKeypoints(camera_debug_image, cam_img_info.keypoints, camera_debug_image, BLUE);
   // Recognize objects
-  Points2IDMap findings;
+  std::vector<IDClusterPair> findings;
   for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
   {
     Cluster2f object_points;
@@ -282,8 +285,8 @@ void callback_simple(const Image::ConstPtr& rgb_input,
       loops++;
       // Visualize result
       draw_rectangle(object_points, GREEN, camera_debug_image);
-      //
-      findings[it->first] = object_points;
+      // We are going to publish this object later
+      findings.push_back(IDClusterPair(it->first, object_points));
       // Remove keypoints belonging to this object from image info,
       // in order to search for other object of the same type
       std::vector<cv::KeyPoint> keypoints_filtered;
@@ -346,7 +349,7 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
   // Draw keypoints to debug image
   cv::drawKeypoints(mipmap_debug_image, cam_img_mipmap_info.keypoints, mipmap_debug_image, BLUE);
   // Recognize sample mipmaps on camera mipmap
-  Points2IDMap mipmap_findings;
+  std::vector<IDClusterPair> mipmap_findings;
   for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
   {
     Cluster2f object_points;
@@ -362,7 +365,7 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
       // Visualize result
       draw_rectangle(object_points, GREEN, mipmap_debug_image);
       // We want to search for this candidate in the original camera image for higher precision
-      mipmap_findings[it->first] = object_points;
+      mipmap_findings.push_back(IDClusterPair(it->first, object_points));
       // Remove keypoints belonging to this candidate from image info,
       // in order to search for other candidates of the same type
       std::vector<cv::KeyPoint> keypoints_filtered;
@@ -390,9 +393,9 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
     return;
   }
   // Recognize objects
-  Points2IDMap findings;
+  std::vector<IDClusterPair> findings;
   double scale = pow(2, mipmap_level);
-  for(Points2IDMap::iterator it = mipmap_findings.begin(); it != mipmap_findings.end(); it++)
+  for(std::vector<IDClusterPair>::iterator it = mipmap_findings.begin(); it != mipmap_findings.end(); it++)
   {
     Cluster2f object_points;
     // Scale points found on the mipmap image back to original size
@@ -411,7 +414,7 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
     if(object_recognizer.recognize(database_processed[it->first].first, cam_img_info, object_points))
     {
       draw_rectangle(object_points, GREEN, camera_debug_image);
-      findings[it->first] = object_points;
+      findings.push_back(IDClusterPair(it->first, object_points));
     }
     else
     {
