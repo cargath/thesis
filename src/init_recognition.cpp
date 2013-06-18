@@ -290,15 +290,17 @@ void callback_simple(const Image::ConstPtr& rgb_input,
       // Remove keypoints belonging to this object from image info,
       // in order to search for other object of the same type
       std::vector<cv::KeyPoint> keypoints_filtered;
+      cv::Mat descriptors_filtered;
       for(size_t i = 0; i < temp_image_info.keypoints.size(); i++)
       {
         if(!insideConvexPolygon(object_points, temp_image_info.keypoints[i].pt))
         {
           keypoints_filtered.push_back(temp_image_info.keypoints[i]);
+          descriptors_filtered.push_back(temp_image_info.descriptors.row(i));
         }
       }
       cv::drawKeypoints(camera_debug_image, keypoints_filtered, camera_debug_image, YELLOW);
-      object_recognizer.getImageInfo(cv_ptr_mono8->image, temp_image_info, &keypoints_filtered);
+      object_recognizer.getImageInfo(cv_ptr_mono8->image, temp_image_info, &keypoints_filtered, &descriptors_filtered);
       // Start next search with an empty vector again
       object_points.clear();
     }
@@ -369,15 +371,17 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
       // Remove keypoints belonging to this candidate from image info,
       // in order to search for other candidates of the same type
       std::vector<cv::KeyPoint> keypoints_filtered;
+      cv::Mat descriptors_filtered;
       for(size_t i = 0; i < temp_image_info.keypoints.size(); i++)
       {
         if(!insideConvexPolygon(object_points, temp_image_info.keypoints[i].pt))
         {
           keypoints_filtered.push_back(temp_image_info.keypoints[i]);
+          descriptors_filtered.push_back(temp_image_info.descriptors.row(i));
         }
       }
       cv::drawKeypoints(mipmap_debug_image, keypoints_filtered, mipmap_debug_image, YELLOW);
-      object_recognizer.getImageInfo(cam_img_mipmap, temp_image_info, &keypoints_filtered);
+      object_recognizer.getImageInfo(cam_img_mipmap, temp_image_info, &keypoints_filtered, &descriptors_filtered);
       // Start next search with an empty vector again
       object_points.clear();
     }
