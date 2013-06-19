@@ -17,6 +17,9 @@
 #include <thesis/image_loader.h>
 
 // This node provides these services
+#include <thesis/DatabaseAddDir.h>
+#include <thesis/DatabaseAddFile.h>
+#include <thesis/DatabaseAddImg.h>
 #include <thesis/DatabaseGetAll.h>
 #include <thesis/DatabaseGetByID.h>
 #include <thesis/DatabaseList.h>
@@ -40,6 +43,27 @@ void callback_openni_once(const sensor_msgs::CameraInfo::ConstPtr& input)
   openni_image_size.width  = input->width;
   openni_image_size.height = input->height;
   openni_once = true;
+}
+
+bool add_directory(thesis::DatabaseAddDir::Request& request,
+                   thesis::DatabaseAddDir::Response& result)
+{
+  // TODO
+  return true;
+}
+
+bool add_file(thesis::DatabaseAddFile::Request& request,
+              thesis::DatabaseAddFile::Response& result)
+{
+  // TODO
+  return true;
+}
+
+bool add_image(thesis::DatabaseAddImg::Request& request,
+               thesis::DatabaseAddImg::Response& result)
+{
+  // TODO
+  return true;
 }
 
 bool get_list(thesis::DatabaseList::Request& request,
@@ -190,10 +214,13 @@ int main(int argc, char** argv)
     samples[sample.id] = sample;
   }
   // Advertise services
-  ros::ServiceServer srv_list    = nh_private.advertiseService("get_list",    get_list);
-  ros::ServiceServer srv_all     = nh_private.advertiseService("get_all",     get_all);
-  ros::ServiceServer srv_by_type = nh_private.advertiseService("get_by_type", get_by_type);
-  ros::ServiceServer srv_update  = nh_private.advertiseService("set_by_type", set_by_type);
+  ros::ServiceServer srv_add_directory = nh_private.advertiseService("add_directory", add_directory);
+  ros::ServiceServer srv_add_file      = nh_private.advertiseService("add_file",      add_file);
+  ros::ServiceServer srv_add_image     = nh_private.advertiseService("add_image",     add_image);
+  ros::ServiceServer srv_get_list      = nh_private.advertiseService("get_list",      get_list);
+  ros::ServiceServer srv_get_all       = nh_private.advertiseService("get_all",       get_all);
+  ros::ServiceServer srv_get_by_type   = nh_private.advertiseService("get_by_type",   get_by_type);
+  ros::ServiceServer srv_set_by_type   = nh_private.advertiseService("set_by_type",   set_by_type);
   // Spin
   ros::spin();
   // Exit

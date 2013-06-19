@@ -43,9 +43,12 @@ using namespace sensor_msgs;
 #define CAMERA_DEBUG_IMAGE_WINDOW "Camera Debug Image"
 #define MIPMAP_DEBUG_IMAGE_WINDOW "Mipmap Debug Image"
 
-// Constants
+// Config constants
 static const unsigned int MAX_OBJECTS_PER_FRAME = 5;
 static const          int DEFAULT_MIPMAP_LEVEL  = 1;
+
+// Camera orientation seen from the camera POV
+static const cv::Point3f YPR_CAMERA = xyz2ypr(cv::Point3f(0.0f, 0.0f, 1.0f));
 
 // FPS counter for debugging purposes
 FPSCalculator fps_calculator;
@@ -80,6 +83,22 @@ ObjectRecognizer object_recognizer;
 // Camera model used to convert pixels to camera coordinates
 image_geometry::PinholeCameraModel camera_model;
 
+inline bool call_db_set_by_type(std::string id, float width, float height)
+{
+  thesis::DatabaseSetByID db_set_by_type_service;
+  db_set_by_type_service.request.sample.id     = id;
+  db_set_by_type_service.request.sample.width  = width;
+  db_set_by_type_service.request.sample.height = height;
+  if(db_set_by_type_client.call(db_set_by_type_service))
+  {
+    return true;
+  }
+  else
+  {
+    return false;
+  }
+}
+
 inline bool draw_rectangle(const std::vector<cv::Point2f>& corners,
                            const cv::Scalar& color,
                            cv::Mat& debug_image)
@@ -107,135 +126,141 @@ inline void create_mipmap(const cv::Mat& image, cv::Mat& mipmap, unsigned int n)
   }
 }
 
-inline void publish_objects(const std::vector<IDClusterPair>& findings,
-                            const cv::Mat& mono8_image,
-                            const cv::Mat1f& depth_image,
-                            const CameraInfo::ConstPtr& cam_info_input)
+inline float get_depth(const cv::Mat1f& depth_image, const cv::Point2f& point)
 {
-  camera_model.fromCameraInfo(cam_info_input);
-  for(std::vector<IDClusterPair>::const_iterator it = findings.begin(); it != findings.end(); it++)
+  if(point.x < depth_image.cols && point.y < depth_image.rows
+     && point.x >= 0 && point.y >= 0)
   {
-    // Create new message
-    thesis::ObjectStamped msg;
-    msg.object_id = it->first;
-    // Get object points in camera coordinate space
-    std::vector<cv::Point3f> camera_coordinates;
-    for(size_t i = 0; i < it->second.size(); i++)
-    {
-      // Check if point is located inside bounds of the image
-      if(!(it->second[i].x <  mono8_image.cols
-        && it->second[i].y <  mono8_image.rows
-        && it->second[i].x >= 0
-        && it->second[i].y >= 0))
-      {
-        continue;
-      }
-      // Get depth value for current pixel
-      float depth = depth_image[(int)it->second[i].y][(int)it->second[i].x];
-      // Check if there is a valid depth value for this pixel
-      if(isnan(depth) || depth == 0)
-      {
-        continue;
-      }
-      // Project object point to camera space
-      cv::Point3f camera_coordinate = camera_model.projectPixelTo3dRay(it->second[i]);
-      // Use distance from depth image to get actual 3D position in camera space
-      camera_coordinate *= depth;
-      // Add result to our vector holding successfully transformed points
-      camera_coordinates.push_back(camera_coordinate);
-    }
-    // We need at least 3 corners of an (planar) object
-    // to calculate its orientation / surface normal
-    if(camera_coordinates.size() >= 3)
-    {
-      // Calculate 2 vectors of a triangle on the (planar) object
-      cv::Point3f a = camera_coordinates[1] - camera_coordinates[0],
-                  b = camera_coordinates[2] - camera_coordinates[0];
-      // Calculate their lengths
-      float ma = mag3f(a),
-            mb = mag3f(b);
-      // Determine which is width and which is height
-      // by looking up which is the longer side of the sample image.
-      // Takes a few more comparisons,
-      // but works with only 3 of an objects 4 corners.
-      thesis::DatabaseSetByID db_set_by_type_service;
-      db_set_by_type_service.request.sample.id = it->first;
-      ObjectRecognizer::ImageInfo image_info = database_processed[it->first].first;
-      if(image_info.width < image_info.height)
-      {
-        if(ma < mb)
-        {
-          db_set_by_type_service.request.sample.width  = ma;
-          db_set_by_type_service.request.sample.height = mb;
-        }
-        else
-        {
-          db_set_by_type_service.request.sample.width  = mb;
-          db_set_by_type_service.request.sample.height = ma;
-        }
-      }
-      else
-      {
-        if(ma < mb)
-        {
-          db_set_by_type_service.request.sample.width  = mb;
-          db_set_by_type_service.request.sample.height = ma;
-        }
-        else
-        {
-          db_set_by_type_service.request.sample.width  = ma;
-          db_set_by_type_service.request.sample.height = mb;
-        }
-      }
-      // Train database
-      if(!db_set_by_type_client.call(db_set_by_type_service))
-      {
-        ROS_ERROR("Failed to call service 'thesis_database/set_by_type'.");
-        return;
-      }
-      // Calculate their cross product
-      cv::Point3f c = cross3f(a, b);
-      // Normalize surface normal
-      cv::Point3f n = norm3f(c);
-      // Convert direction vector (surface normal) to Euler angles
-      cv::Point3f ypr = xyz2ypr(n);
-      // Get centroid of the object in camera coordinate space
-      cv::Point3f centroid = centroid3f(camera_coordinates);
-      // Fill message with our calculations
-      msg.object_pose.header.stamp     = ros::Time::now();
-      msg.object_pose.header.frame_id  = CAMERA_FRAME;
-      msg.object_pose.pose.position.x  = centroid.x;
-      msg.object_pose.pose.position.y  = centroid.y;
-      msg.object_pose.pose.position.z  = centroid.z;
-      msg.object_pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(ypr.z, ypr.y, ypr.x);
-    }
-    else
-    {
-      // No depth value available
-      // Fill object pose with placeholders instead of throwing it away,
-      // (camera pose - see below - might still be useful)
-      msg.object_pose.header.stamp       = ros::Time(0);
-      msg.object_pose.header.frame_id    = MAP_FRAME;
-      msg.object_pose.pose.position.x    = NAN;
-      msg.object_pose.pose.position.y    = NAN;
-      msg.object_pose.pose.position.z    = NAN;
-      msg.object_pose.pose.orientation.x = NAN;
-      msg.object_pose.pose.orientation.y = NAN;
-      msg.object_pose.pose.orientation.z = NAN;
-      msg.object_pose.pose.orientation.w = NAN;
-    }
-    // Get camera angles
-    cv::Point3f ypr_camera = xyz2ypr(cv::Point3f(0.0f, 0.0f, 1.0f));
-    // Fill message with our calculations
-    msg.camera_pose.header.stamp     = ros::Time::now();
-    msg.camera_pose.header.frame_id  = CAMERA_FRAME;
-    msg.camera_pose.pose.position.x  = 0;
-    msg.camera_pose.pose.position.y  = 0;
-    msg.camera_pose.pose.position.z  = 0;
-    msg.camera_pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(ypr_camera.z, ypr_camera.y, ypr_camera.x);
-    // Publish message
-    object_publisher.publish(msg);
+    float depth = depth_image[(int)point.y][(int)point.x];
+    return depth;
   }
+  else
+  {
+    return NAN;
+  }
+}
+
+inline float get_depth(const cv::Mat1f& depth_image, const Cluster2f& corners)
+{
+  // TODO
+  return 0.0f;
+}
+
+inline void publish_object(const IDClusterPair& finding,
+                           const cv::Mat& mono8_image,
+                           const cv::Mat1f& depth_image)
+{
+  // Create new message
+  thesis::ObjectStamped msg;
+  msg.object_id = finding.first;
+  msg.object_pose.header.stamp     = ros::Time::now();
+  msg.object_pose.header.frame_id  = CAMERA_FRAME;
+  msg.camera_pose.header.stamp     = msg.object_pose.header.stamp;
+  msg.camera_pose.header.frame_id  = CAMERA_FRAME;
+  msg.camera_pose.pose.position.x  = 0;
+  msg.camera_pose.pose.position.y  = 0;
+  msg.camera_pose.pose.position.z  = 0;
+  msg.camera_pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(YPR_CAMERA.z, YPR_CAMERA.y, YPR_CAMERA.x);
+  // Get object points in camera coordinate space
+  std::vector<cv::Point3f> camera_coordinates,
+                           good_camera_coordinates;
+  for(size_t i = 0; i < finding.second.size(); i++)
+  {
+    // Get depth value for current pixel
+    float depth = get_depth(depth_image, finding.second[i]);
+    // Check if there is a valid depth value for this pixel
+    if(isnan(depth) || depth == 0)
+    {
+      camera_coordinates.push_back(cv::Point3f(NAN, NAN, NAN));
+      continue;
+    }
+    // Project object point to camera coordinate space
+    cv::Point3f camera_coordinate = camera_model.projectPixelTo3dRay(finding.second[i]);
+    // Use distance from depth image to get actual 3D position in camera space
+    camera_coordinate *= depth;
+    // Add result to our vector holding successfully transformed points
+    camera_coordinates.push_back(camera_coordinate);
+    good_camera_coordinates.push_back(camera_coordinate);
+  }
+  // Get object position in camera coordinate space
+  if(good_camera_coordinates.size() >= 1)
+  {
+    cv::Point3f centroid = centroid3f(good_camera_coordinates);
+    msg.object_pose.pose.position.x = centroid.x;
+    msg.object_pose.pose.position.y = centroid.y;
+    msg.object_pose.pose.position.z = centroid.z;
+  }
+  else if(float depth = get_depth(depth_image, finding.second))
+  {
+    // TODO
+  }
+  else
+  {
+    // No depth value available.
+    // Fill object pose with placeholders instead of throwing it away
+    // (camera pose - see below - might still be useful)
+    msg.object_pose.header.stamp    = ros::Time(0);
+    msg.object_pose.header.frame_id = MAP_FRAME;
+    msg.object_pose.pose.position.x = NAN;
+    msg.object_pose.pose.position.y = NAN;
+    msg.object_pose.pose.position.z = NAN;
+  }
+  // Calculate 2 vectors of a triangle on the (planar) object
+  cv::Point3f w, h;
+  if(!isnan(camera_coordinates[0]) && !isnan(camera_coordinates[1]) && !isnan(camera_coordinates[3]))
+  {
+    w = camera_coordinates[1] - camera_coordinates[0],
+    h = camera_coordinates[3] - camera_coordinates[0];
+  }
+  else if(!isnan(camera_coordinates[1]) && !isnan(camera_coordinates[2]) && !isnan(camera_coordinates[0]))
+  {
+    h = camera_coordinates[2] - camera_coordinates[1],
+    w = camera_coordinates[0] - camera_coordinates[1];
+  }
+  else if(!isnan(camera_coordinates[2]) && !isnan(camera_coordinates[3]) && !isnan(camera_coordinates[1]))
+  {
+    w = camera_coordinates[3] - camera_coordinates[2],
+    h = camera_coordinates[1] - camera_coordinates[2];
+  }
+  else if(!isnan(camera_coordinates[3]) && !isnan(camera_coordinates[0]) && !isnan(camera_coordinates[2]))
+  {
+    h = camera_coordinates[0] - camera_coordinates[3],
+    w = camera_coordinates[2] - camera_coordinates[3];
+  }
+  else
+  {
+    w = cv::Point3f(NAN, NAN, NAN);
+    h = cv::Point3f(NAN, NAN, NAN);
+  }
+  // Get object orientation & dimensions in camera coordinate space
+  if(!(isnan(w) || isnan(h)))
+  {
+    // Update database with their dimensions
+    if(!call_db_set_by_type(finding.first, mag3f(w), mag3f(h)))
+    {
+      ROS_ERROR("Failed to call service 'thesis_database/set_by_type'.");
+    }
+    // Calculate their cross product
+    cv::Point3f c = cross3f(w, h);
+    // Normalize surface normal
+    cv::Point3f n = norm3f(c);
+    // If the camera successfully recognizes an object,
+    // the object obviously faces the camera
+    cv::Point3f n_ = abs(n);
+    // Convert direction vector (surface normal) to Euler angles
+    cv::Point3f ypr = xyz2ypr(n_);
+    // Convert Euler angles to quaternion
+    msg.object_pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(ypr.z, ypr.y, ypr.x);
+  }
+  else
+  {
+    msg.object_pose.pose.orientation.x = NAN;
+    msg.object_pose.pose.orientation.y = NAN;
+    msg.object_pose.pose.orientation.z = NAN;
+    msg.object_pose.pose.orientation.w = NAN;
+  }
+  // Publish message
+  object_publisher.publish(msg);
 }
 
 void callback_simple(const Image::ConstPtr& rgb_input,
@@ -308,7 +333,11 @@ void callback_simple(const Image::ConstPtr& rgb_input,
     draw_rectangle(object_points, RED, camera_debug_image);
   }
   // Publish objects
-  publish_objects(findings, cv_ptr_mono8->image, depth_image, cam_info_input);
+  camera_model.fromCameraInfo(cam_info_input);
+  for(size_t i = 0; i < findings.size(); i++)
+  {
+    publish_object(findings[i], cv_ptr_mono8->image, depth_image);
+  }
   // Show debug image
   cv::imshow(CAMERA_DEBUG_IMAGE_WINDOW, camera_debug_image);
   cv::waitKey(3);
@@ -431,7 +460,11 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
     }
   }
   // Publish objects
-  publish_objects(findings, cv_ptr_mono8->image, depth_image, cam_info_input);
+  camera_model.fromCameraInfo(cam_info_input);
+  for(size_t i = 0; i < findings.size(); i++)
+  {
+    publish_object(findings[i], cv_ptr_mono8->image, depth_image);
+  }
   // Show debug image
   cv::imshow(CAMERA_DEBUG_IMAGE_WINDOW, camera_debug_image);
   cv::imshow(MIPMAP_DEBUG_IMAGE_WINDOW, mipmap_debug_image);
