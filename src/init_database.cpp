@@ -10,6 +10,9 @@
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
 
+// We try to get the image size of an OpenNI camera (if available)
+#include <sensor_msgs/CameraInfo.h>
+
 // Local headers
 #include <thesis/image_loader.h>
 
@@ -19,11 +22,25 @@
 #include <thesis/DatabaseList.h>
 #include <thesis/DatabaseSetByID.h>
 
+// Constants
+static const double MAX_OPENNI_TOPIC_WAIT_TIME = 5.0;
+
 ImageLoader image_loader;
+
+// We try to get the image size of an OpenNI camera (if available)
+bool openni_once = false;
+cv::Size openni_image_size;
 
 // Store all sample objects mapped to their IDs for quick access
 typedef std::map<std::string, thesis::Sample> SampleMap;
 SampleMap samples;
+
+void callback_openni_once(const sensor_msgs::CameraInfo::ConstPtr& input)
+{
+  openni_image_size.width  = input->width;
+  openni_image_size.height = input->height;
+  openni_once = true;
+}
 
 bool get_list(thesis::DatabaseList::Request& request,
               thesis::DatabaseList::Response& result)
@@ -69,22 +86,52 @@ int main(int argc, char** argv)
 {
   // Initialize ROS
   ros::init(argc, argv, "thesis_database");
+  ros::NodeHandle nh;
   ros::NodeHandle nh_private("~");
   // Get path to image directory
   std::string image_path;
   nh_private.param("image_path", image_path, std::string("img"));
-  // Get image size limits
+  // Get OpenNI camera image size
   cv::Size min_image_size,
            max_image_size;
+  std::string camera_info_topic;
+  nh.param("camera_info_topic", camera_info_topic, std::string("camera/depth_registered/camera_info"));
+  ros::Subscriber camera_info_subscriber = nh.subscribe(camera_info_topic, 1, callback_openni_once);
+  ros::Time wait_time = ros::Time::now();
+  while(!openni_once)
+  {
+    ros::spinOnce();
+    if(ros::Time::now().toSec() - wait_time.toSec() > MAX_OPENNI_TOPIC_WAIT_TIME)
+    {
+      break;
+    }
+  }
+  camera_info_subscriber.shutdown();
+  if(openni_once)
+  {
+    ROS_ASSERT_MSG(openni_image_size.width > 0 && openni_image_size.height > 0,
+                   "Got bad image size from OpenNI camera.");
+    max_image_size.width  = openni_image_size.width;
+    max_image_size.height = openni_image_size.height;
+    ROS_INFO("Got the following image resolution from OpenNI camera: %ix%i",
+             openni_image_size.width, openni_image_size.height);
+  }
+  else
+  {
+    nh_private.param("max_image_width",  max_image_size.width,  1280);
+    nh_private.param("max_image_height", max_image_size.height, 1024);
+    ROS_INFO("Unable to get image resolution from OpenNI camera.");
+    ROS_INFO("Using default or given max resolution (%ix%i) instead.",
+             max_image_size.width, max_image_size.height);
+  }
   nh_private.param("min_image_width",  min_image_size.width,  1);
   nh_private.param("min_image_height", min_image_size.height, 1);
-  nh_private.param("max_image_width",  max_image_size.width,  1280);
-  nh_private.param("max_image_height", max_image_size.height, 1024);
   // Create sample database
   std::vector<cv::Mat> images;
   std::vector<std::string> filenames;
   image_loader.load_directory(image_path, images, &filenames);
-  ROS_ASSERT_MSG(images.size() == filenames.size(), "Number of images should be the same as number of filenames.");
+  ROS_ASSERT_MSG(images.size() == filenames.size(),
+                 "Number of images should be the same as number of filenames.");
   for(size_t i = 0; i < images.size(); i++)
   {
     thesis::Sample sample;
@@ -92,7 +139,8 @@ int main(int argc, char** argv)
     // Check if image is large enough
     if(images[i].cols < min_image_size.width || images[i].rows < min_image_size.height)
     {
-      ROS_WARN("Image '%s' is smaller than %i x %i.", filenames[i].c_str(), min_image_size.width, min_image_size.height);
+      ROS_WARN("Image '%s' is smaller than %i x %i.",
+               filenames[i].c_str(), min_image_size.width, min_image_size.height);
       ROS_WARN("Don't add it to database.");
       continue;
     }
