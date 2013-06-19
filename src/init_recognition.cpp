@@ -45,7 +45,7 @@ using namespace sensor_msgs;
 
 // Config constants
 static const unsigned int MAX_OBJECTS_PER_FRAME = 5;
-static const          int DEFAULT_MIPMAP_LEVEL  = 1;
+static const          int DEFAULT_MIPMAP_LEVEL  = 0;
 
 // Camera orientation seen from the camera POV
 static const cv::Point3f YPR_CAMERA = xyz2ypr(cv::Point3f(0.0f, 0.0f, 1.0f));
@@ -306,13 +306,10 @@ void callback_simple(const Image::ConstPtr& rgb_input,
   for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
   {
     Cluster2f object_points;
-    // Copy image info, because we are going to modify it
-    ObjectRecognizer::ImageInfo temp_image_info;
-    object_recognizer.copyImageInfo(cam_img_info, temp_image_info);
     // Search for an object until we don't find any more occurrences
     unsigned int loops = 0;
     while(loops <= MAX_OBJECTS_PER_FRAME
-          && object_recognizer.recognize(it->second.first, temp_image_info, object_points))
+          && object_recognizer.recognize(it->second.first, cam_img_info, object_points))
     {
       loops++;
       // Visualize result
@@ -323,19 +320,19 @@ void callback_simple(const Image::ConstPtr& rgb_input,
       // in order to search for other object of the same type
       std::vector<cv::KeyPoint> keypoints_filtered;
       cv::Mat descriptors_filtered;
-      for(size_t i = 0; i < temp_image_info.keypoints.size(); i++)
+      for(size_t i = 0; i < cam_img_info.keypoints.size(); i++)
       {
-        if(!insideConvexPolygon(object_points, temp_image_info.keypoints[i].pt))
+        if(!insideConvexPolygon(object_points, cam_img_info.keypoints[i].pt))
         {
-          keypoints_filtered.push_back(temp_image_info.keypoints[i]);
-          descriptors_filtered.push_back(temp_image_info.descriptors.row(i));
+          keypoints_filtered.push_back(cam_img_info.keypoints[i]);
+          descriptors_filtered.push_back(cam_img_info.descriptors.row(i));
         }
         else
         {
-          keypoints_cut.push_back(temp_image_info.keypoints[i]);
+          keypoints_cut.push_back(cam_img_info.keypoints[i]);
         }
       }
-      object_recognizer.getImageInfo(cv_ptr_mono8->image, temp_image_info, &keypoints_filtered, &descriptors_filtered);
+      object_recognizer.getImageInfo(cv_ptr_mono8->image, cam_img_info, &keypoints_filtered, &descriptors_filtered);
       // Start next search with an empty vector again
       object_points.clear();
     }
@@ -398,13 +395,10 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
   for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
   {
     Cluster2f object_points;
-    // Copy image info, because we are going to modify it
-    ObjectRecognizer::ImageInfo temp_image_info;
-    object_recognizer.copyImageInfo(cam_img_mipmap_info, temp_image_info);
     // Search for an object until we don't find any more occurrences
     unsigned int loops = 0;
     while(loops <= MAX_OBJECTS_PER_FRAME
-          && object_recognizer.recognize(it->second.second, temp_image_info, object_points))
+          && object_recognizer.recognize(it->second.second, cam_img_mipmap_info, object_points))
     {
       loops++;
       // Visualize result
@@ -415,19 +409,19 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
       // in order to search for other candidates of the same type
       std::vector<cv::KeyPoint> keypoints_filtered;
       cv::Mat descriptors_filtered;
-      for(size_t i = 0; i < temp_image_info.keypoints.size(); i++)
+      for(size_t i = 0; i < cam_img_mipmap_info.keypoints.size(); i++)
       {
-        if(!insideConvexPolygon(object_points, temp_image_info.keypoints[i].pt))
+        if(!insideConvexPolygon(object_points, cam_img_mipmap_info.keypoints[i].pt))
         {
-          keypoints_filtered.push_back(temp_image_info.keypoints[i]);
-          descriptors_filtered.push_back(temp_image_info.descriptors.row(i));
+          keypoints_filtered.push_back(cam_img_mipmap_info.keypoints[i]);
+          descriptors_filtered.push_back(cam_img_mipmap_info.descriptors.row(i));
         }
         else
         {
-          keypoints_cut.push_back(temp_image_info.keypoints[i]);
+          keypoints_cut.push_back(cam_img_mipmap_info.keypoints[i]);
         }
       }
-      object_recognizer.getImageInfo(cam_img_mipmap, temp_image_info, &keypoints_filtered, &descriptors_filtered);
+      object_recognizer.getImageInfo(cam_img_mipmap, cam_img_mipmap_info, &keypoints_filtered, &descriptors_filtered);
       // Start next search with an empty vector again
       object_points.clear();
     }
