@@ -30,13 +30,80 @@ static const double MAX_OPENNI_TOPIC_WAIT_TIME = 5.0;
 
 ImageLoader image_loader;
 
-// We try to get the image size of an OpenNI camera (if available)
+// We try to get the image size of a connected OpenNI camera (if available)
 bool openni_once = false;
 cv::Size openni_image_size;
+
+// Image size limits
+cv::Size min_image_size,
+         max_image_size;
 
 // Store all sample objects mapped to their IDs for quick access
 typedef std::map<std::string, thesis::Sample> SampleMap;
 SampleMap samples;
+
+bool add_image(cv::Mat& image, std::string name)
+{
+  // Check if image is large enough
+  if(image.cols < min_image_size.width || image.rows < min_image_size.height)
+  {
+    ROS_WARN("Image '%s' is smaller than %i x %i.",
+             name.c_str(), min_image_size.width, min_image_size.height);
+    ROS_WARN("Don't add it to database.");
+    return false;
+  }
+  // Determine if we need max_image_size in portrait or landscape orientation
+  // in order to match the sample image orientation
+  if(max_image_size.width < max_image_size.height)
+  {
+    max_image_size = (image.cols <  image.rows) ? max_image_size : cv::Size(max_image_size.height, max_image_size.width);
+  }
+  else
+  {
+    max_image_size = (image.cols >= image.rows) ? max_image_size : cv::Size(max_image_size.height, max_image_size.width);
+  }
+  // Resize image (if too large)
+  cv::Mat image_resized;
+  if(image.cols > max_image_size.width || image.rows > max_image_size.height)
+  {
+    // ...determine biggest possible new size with the same aspect ratio
+    cv::Size re_size;
+    float aspect_ratio_width  = (float) max_image_size.width  / (float) image.cols,
+          aspect_ratio_height = (float) max_image_size.height / (float) image.rows;
+    if(aspect_ratio_width < aspect_ratio_height)
+    {
+      re_size = cv::Size(image.cols * aspect_ratio_width,
+                         image.rows * aspect_ratio_width);
+    }
+    else
+    {
+      re_size = cv::Size(image.cols * aspect_ratio_height,
+                         image.rows * aspect_ratio_height);
+    }
+    // ...and resize it accordingly
+    ROS_WARN("Image '%s' is bigger than %i x %i.", name.c_str(), max_image_size.width, max_image_size.height);
+    ROS_WARN("Resizing it to %i x %i.", re_size.width, re_size.height);
+    cv::resize(image, image_resized, re_size);
+  }
+  else
+  {
+    image_resized = image;
+  }
+  // Create empty sample
+  thesis::Sample sample;
+  sample.id     = name;
+  sample.width  = 0;
+  sample.height = 0;
+  // Convert OpenCV image to ROS image message
+  cv_bridge::CvImage cv_image;
+  cv_image.encoding = sensor_msgs::image_encodings::MONO8;
+  cv_image.image    = image_resized;
+  cv_image.toImageMsg(sample.image);
+  // Add sample to database
+  samples[sample.id] = sample;
+  // Success
+  return true;
+}
 
 void callback_openni_once(const sensor_msgs::CameraInfo::ConstPtr& input)
 {
@@ -115,9 +182,7 @@ int main(int argc, char** argv)
   // Get path to image directory
   std::string image_path;
   nh_private.param("image_path", image_path, std::string("img"));
-  // Get OpenNI camera image size
-  cv::Size min_image_size,
-           max_image_size;
+  // Try to get OpenNI camera image size
   std::string camera_info_topic;
   nh.param("camera_info_topic", camera_info_topic, std::string("camera/depth_registered/camera_info"));
   ros::Subscriber camera_info_subscriber = nh.subscribe(camera_info_topic, 1, callback_openni_once);
@@ -131,6 +196,9 @@ int main(int argc, char** argv)
     }
   }
   camera_info_subscriber.shutdown();
+  // Set image size limits
+  nh_private.param("min_image_width",  min_image_size.width,  1);
+  nh_private.param("min_image_height", min_image_size.height, 1);
   if(openni_once)
   {
     ROS_ASSERT_MSG(openni_image_size.width > 0 && openni_image_size.height > 0,
@@ -148,8 +216,6 @@ int main(int argc, char** argv)
     ROS_INFO("Using default or given max resolution (%ix%i) instead.",
              max_image_size.width, max_image_size.height);
   }
-  nh_private.param("min_image_width",  min_image_size.width,  1);
-  nh_private.param("min_image_height", min_image_size.height, 1);
   // Create sample database
   std::vector<cv::Mat> images;
   std::vector<std::string> filenames;
@@ -158,60 +224,7 @@ int main(int argc, char** argv)
                  "Number of images should be the same as number of filenames.");
   for(size_t i = 0; i < images.size(); i++)
   {
-    thesis::Sample sample;
-    sample.id = filenames[i];
-    // Check if image is large enough
-    if(images[i].cols < min_image_size.width || images[i].rows < min_image_size.height)
-    {
-      ROS_WARN("Image '%s' is smaller than %i x %i.",
-               filenames[i].c_str(), min_image_size.width, min_image_size.height);
-      ROS_WARN("Don't add it to database.");
-      continue;
-    }
-    // Determine if max image size needs to be in portrait or landscape orientation
-    // in order to match the sample image orientation
-    if(max_image_size.width < max_image_size.height)
-    {
-      max_image_size = (images[i].cols <  images[i].rows) ? max_image_size : cv::Size(max_image_size.height, max_image_size.width);
-    }
-    else
-    {
-      max_image_size = (images[i].cols >= images[i].rows) ? max_image_size : cv::Size(max_image_size.height, max_image_size.width);
-    }
-    // If the input image is too big...
-    cv::Mat resized;
-    if(images[i].cols > max_image_size.width || images[i].rows > max_image_size.height)
-    {
-      // ...determine biggest possible new size with the same aspect ratio
-      cv::Size re_size;
-      float aspect_ratio_width  = (float) max_image_size.width  / (float) images[i].cols,
-            aspect_ratio_height = (float) max_image_size.height / (float) images[i].rows;
-      if(aspect_ratio_width < aspect_ratio_height)
-      {
-        re_size = cv::Size(images[i].cols * aspect_ratio_width,
-                           images[i].rows * aspect_ratio_width);
-      }
-      else
-      {
-        re_size = cv::Size(images[i].cols * aspect_ratio_height,
-                           images[i].rows * aspect_ratio_height);
-      }
-      // ...and resize it accordingly
-      ROS_WARN("Image '%s' is bigger than %i x %i.", filenames[i].c_str(), max_image_size.width, max_image_size.height);
-      ROS_WARN("Resizing it to %i x %i.", re_size.width, re_size.height);
-      cv::resize(images[i], resized, re_size);
-    }
-    else
-    {
-      resized = images[i];
-    }
-    // Convert OpenCV image to ROS image message
-    cv_bridge::CvImage cv_image;
-    cv_image.encoding = sensor_msgs::image_encodings::MONO8;
-    cv_image.image    = resized;
-    cv_image.toImageMsg(sample.image);
-    // Add to database
-    samples[sample.id] = sample;
+    add_image(images[i], filenames[i]);
   }
   // Advertise services
   ros::ServiceServer srv_add_directory = nh_private.advertiseService("add_directory", add_directory);

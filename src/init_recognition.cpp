@@ -99,6 +99,21 @@ inline bool call_db_set_by_type(std::string id, float width, float height)
   }
 }
 
+inline geometry_msgs::Quaternion quaternion_from_plane(cv::Point3f w, cv::Point3f h)
+{
+  // Calculate the cross product of the given sides of the plane
+  cv::Point3f c = cross3f(w, h);
+  // Normalize surface normal
+  cv::Point3f n = norm3f(c);
+  // If the camera successfully recognizes an object,
+  // the object obviously faces the camera
+  cv::Point3f n_ = abs(n);
+  // Convert direction vector (surface normal) to Euler angles
+  cv::Point3f ypr = xyz2ypr(n_);
+  // Convert Euler angles to quaternion
+  return tf::createQuaternionMsgFromRollPitchYaw(ypr.z, ypr.y, ypr.x);
+}
+
 inline bool draw_rectangle(const std::vector<cv::Point2f>& corners,
                            const cv::Scalar& color,
                            cv::Mat& debug_image)
@@ -240,17 +255,8 @@ inline void publish_object(const IDClusterPair& finding,
     {
       ROS_ERROR("Failed to call service 'thesis_database/set_by_type'.");
     }
-    // Calculate their cross product
-    cv::Point3f c = cross3f(w, h);
-    // Normalize surface normal
-    cv::Point3f n = norm3f(c);
-    // If the camera successfully recognizes an object,
-    // the object obviously faces the camera
-    cv::Point3f n_ = abs(n);
-    // Convert direction vector (surface normal) to Euler angles
-    cv::Point3f ypr = xyz2ypr(n_);
-    // Convert Euler angles to quaternion
-    msg.object_pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(ypr.z, ypr.y, ypr.x);
+    // Compute object orientation
+    msg.object_pose.pose.orientation = quaternion_from_plane(w, h);
   }
   else
   {
@@ -293,9 +299,10 @@ void callback_simple(const Image::ConstPtr& rgb_input,
   ObjectRecognizer::ImageInfo cam_img_info;
   object_recognizer.getImageInfo(cv_ptr_mono8->image, cam_img_info);
   // Draw keypoints to debug image
-  cv::drawKeypoints(camera_debug_image, cam_img_info.keypoints, camera_debug_image, BLUE);
+  cv::drawKeypoints(camera_debug_image, cam_img_info.keypoints, camera_debug_image, YELLOW);
   // Recognize objects
   std::vector<IDClusterPair> findings;
+  std::vector<cv::KeyPoint> keypoints_cut;
   for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
   {
     Cluster2f object_points;
@@ -305,7 +312,7 @@ void callback_simple(const Image::ConstPtr& rgb_input,
     // Search for an object until we don't find any more occurrences
     unsigned int loops = 0;
     while(loops <= MAX_OBJECTS_PER_FRAME
-          && object_recognizer.recognize(it->second.first, cam_img_info, object_points))
+          && object_recognizer.recognize(it->second.first, temp_image_info, object_points))
     {
       loops++;
       // Visualize result
@@ -323,8 +330,11 @@ void callback_simple(const Image::ConstPtr& rgb_input,
           keypoints_filtered.push_back(temp_image_info.keypoints[i]);
           descriptors_filtered.push_back(temp_image_info.descriptors.row(i));
         }
+        else
+        {
+          keypoints_cut.push_back(temp_image_info.keypoints[i]);
+        }
       }
-      cv::drawKeypoints(camera_debug_image, keypoints_filtered, camera_debug_image, YELLOW);
       object_recognizer.getImageInfo(cv_ptr_mono8->image, temp_image_info, &keypoints_filtered, &descriptors_filtered);
       // Start next search with an empty vector again
       object_points.clear();
@@ -332,6 +342,9 @@ void callback_simple(const Image::ConstPtr& rgb_input,
     // Draw result one last time in order to visualize false positives
     draw_rectangle(object_points, RED, camera_debug_image);
   }
+  // Draw those keypoints we cut
+  // because they belonged to a successfully recognized object
+  cv::drawKeypoints(camera_debug_image, keypoints_cut, camera_debug_image, BLUE);
   // Publish objects
   camera_model.fromCameraInfo(cam_info_input);
   for(size_t i = 0; i < findings.size(); i++)
@@ -378,9 +391,10 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
   ObjectRecognizer::ImageInfo cam_img_mipmap_info;
   object_recognizer.getImageInfo(cam_img_mipmap, cam_img_mipmap_info);
   // Draw keypoints to debug image
-  cv::drawKeypoints(mipmap_debug_image, cam_img_mipmap_info.keypoints, mipmap_debug_image, BLUE);
+  cv::drawKeypoints(mipmap_debug_image, cam_img_mipmap_info.keypoints, mipmap_debug_image, YELLOW);
   // Recognize sample mipmaps on camera mipmap
   std::vector<IDClusterPair> mipmap_findings;
+  std::vector<cv::KeyPoint> keypoints_cut;
   for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
   {
     Cluster2f object_points;
@@ -408,8 +422,11 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
           keypoints_filtered.push_back(temp_image_info.keypoints[i]);
           descriptors_filtered.push_back(temp_image_info.descriptors.row(i));
         }
+        else
+        {
+          keypoints_cut.push_back(temp_image_info.keypoints[i]);
+        }
       }
-      cv::drawKeypoints(mipmap_debug_image, keypoints_filtered, mipmap_debug_image, YELLOW);
       object_recognizer.getImageInfo(cam_img_mipmap, temp_image_info, &keypoints_filtered, &descriptors_filtered);
       // Start next search with an empty vector again
       object_points.clear();
@@ -417,6 +434,8 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
     // Draw result one last time in order to visualize false positives
     draw_rectangle(object_points, RED, mipmap_debug_image);
   }
+  // We did not find anything on the mipmap camera image.
+  // Don't look any further.
   if(mipmap_findings.size() < 1)
   {
     // Show debug image
@@ -425,6 +444,9 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
     cv::waitKey(3);
     return;
   }
+  // Draw those keypoints we cut
+  // because they belonged to a successfully recognized object
+  cv::drawKeypoints(mipmap_debug_image, keypoints_cut, mipmap_debug_image, BLUE);
   // Compute keypoints and descriptors for the original camera image
   std::vector<cv::KeyPoint> camera_image_keypoints;
   object_recognizer.getKeypoints(cv_ptr_mono8->image, camera_image_keypoints);
