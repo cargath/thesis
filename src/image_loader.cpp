@@ -16,7 +16,7 @@ ImageLoader::~ImageLoader()
   // Default destructor
 }
 
-bool ImageLoader::load_image(const std::string& path, cv::Mat& out_image)
+bool load_image(const std::string& path, cv::Mat& out_image)
 {
   out_image = cv::imread(path, CV_LOAD_IMAGE_GRAYSCALE);
   if(!out_image.empty())

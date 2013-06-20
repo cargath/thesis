@@ -105,6 +105,23 @@ bool add_image(cv::Mat& image, std::string name)
   return true;
 }
 
+bool add_image(sensor_msgs::Image& image, std::string name)
+{
+  // Convert ROS image message to OpenCV image
+  cv_bridge::CvImagePtr cv_ptr;
+  try
+  {
+    cv_ptr = cv_bridge::toCvCopy(image, sensor_msgs::image_encodings::MONO8);
+  }
+  catch (cv_bridge::Exception& e)
+  {
+    ROS_ERROR("cv_bridge exception: %s", e.what());
+    return false;
+  }
+  // Add OpenCV image
+  return add_image(cv_ptr->image, name);
+}
+
 void callback_openni_once(const sensor_msgs::CameraInfo::ConstPtr& input)
 {
   openni_image_size.width  = input->width;
@@ -115,22 +132,56 @@ void callback_openni_once(const sensor_msgs::CameraInfo::ConstPtr& input)
 bool add_directory(thesis::DatabaseAddDir::Request& request,
                    thesis::DatabaseAddDir::Response& result)
 {
-  // TODO
-  return true;
+  std::vector<cv::Mat> images;
+  std::vector<std::string> filenames;
+  if(image_loader.load_directory(request.path, images, &filenames))
+  {
+    for(size_t i = 0; i < images.size(); i++)
+    {
+      add_image(images[i], filenames[i]);
+    }
+    return true;
+  }
+  else
+  {
+    return false;
+  }
 }
 
 bool add_file(thesis::DatabaseAddFile::Request& request,
               thesis::DatabaseAddFile::Response& result)
 {
-  // TODO
-  return true;
+  cv::Mat image;
+  if(image_loader.load_image(request.path, image))
+  {
+    if(request.name.length() > 0)
+    {
+      return add_image(image, request.name);
+    }
+    else
+    {
+      ROS_INFO("Image name empty. Using path name ('%s') instead.", request.path.c_str());
+      return add_image(image, request.path);
+    }
+  }
+  else
+  {
+    return false;
+  }
 }
 
 bool add_image(thesis::DatabaseAddImg::Request& request,
                thesis::DatabaseAddImg::Response& result)
 {
-  // TODO
-  return true;
+  if(request.name.length() > 0)
+  {
+    // TODO return add_image(request.image, request.name);
+  }
+  else
+  {
+    ROS_WARN("Don't add image to database, because image name is empty.");
+    return false;
+  }
 }
 
 bool get_list(thesis::DatabaseList::Request& request,
@@ -220,8 +271,6 @@ int main(int argc, char** argv)
   std::vector<cv::Mat> images;
   std::vector<std::string> filenames;
   image_loader.load_directory(image_path, images, &filenames);
-  ROS_ASSERT_MSG(images.size() == filenames.size(),
-                 "Number of images should be the same as number of filenames.");
   for(size_t i = 0; i < images.size(); i++)
   {
     add_image(images[i], filenames[i]);

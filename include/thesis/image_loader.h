@@ -16,7 +16,6 @@ class ImageLoader
     ~ImageLoader();
     
     // Read a single sample image
-    bool load_image(const std::string& path, cv::Mat& out_image);
     bool load_image(boost::filesystem::path path, cv::Mat& out_image);
     
     // Read all sample images from a directory
