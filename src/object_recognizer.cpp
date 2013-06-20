@@ -35,7 +35,10 @@ void ObjectRecognizer::getDescriptors(const cv::Mat& image,
                                       std::vector<cv::KeyPoint>& keypoints,
                                       cv::Mat& descriptors)
 {
-  descriptor_extractor.compute(image, keypoints, descriptors);
+  if(!keypoints.empty())
+  {
+    descriptor_extractor.compute(image, keypoints, descriptors);
+  }
 }
 
 void ObjectRecognizer::getImageInfo(const cv::Mat& image,
@@ -61,7 +64,10 @@ void ObjectRecognizer::getImageInfo(const cv::Mat& image,
   }
   else
   {
-    descriptor_extractor.compute(image, image_info.keypoints, image_info.descriptors);
+    if(!image_info.keypoints.empty())
+    {
+      descriptor_extractor.compute(image, image_info.keypoints, image_info.descriptors);
+    }
   }
   // Train matcher
   if(!image_info.descriptors.empty())
@@ -141,8 +147,11 @@ bool ObjectRecognizer::recognize(ImageInfo& sample_info,
                                  ImageInfo& cam_img_info,
                                  std::vector<cv::Point2f>& object_points)
 {
+  std::vector<cv::Mat> train_descriptors = cam_img_info.matcher.getTrainDescriptors();
   // Otherwise an OpenCV assertion would fail for images without keypoints
-  if(cam_img_info.descriptors.empty() || sample_info.descriptors.empty())
+  if(cam_img_info.matcher.empty()
+  || train_descriptors.front().rows < 2
+  || sample_info.descriptors.rows   < 2)
   {
     return false;
   }

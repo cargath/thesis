@@ -83,6 +83,9 @@ ObjectRecognizer object_recognizer;
 // Camera model used to convert pixels to camera coordinates
 image_geometry::PinholeCameraModel camera_model;
 
+// Remember when we have successfully recognized an object and where
+std::vector<IDClusterPair> tracking_objects;
+
 inline bool call_db_set_by_type(std::string id, float width, float height)
 {
   thesis::DatabaseSetByID db_set_by_type_service;
@@ -428,9 +431,10 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
     // Draw result one last time in order to visualize false positives
     draw_rectangle(object_points, RED, mipmap_debug_image);
   }
-  // We did not find anything on the mipmap camera image.
+  // We did not find anything on the mipmap camera image,
+  // and we didn't find anything last time.
   // Don't look any further.
-  if(mipmap_findings.size() < 1)
+  if(mipmap_findings.size() < 1 && tracking_objects.size() < 1)
   {
     // Show debug image
     cv::imshow(CAMERA_DEBUG_IMAGE_WINDOW, camera_debug_image);
@@ -438,6 +442,26 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
     cv::waitKey(3);
     return;
   }
+  // Create a vector holding
+  // - all objects found in mipmap camera image
+  //   (they are added first, making perception more stable during movement)
+  // - all objects successfully found last frame
+  // They are the candidates we want to search in the original camera image
+  std::vector<IDClusterPair> temp_tracking;
+  double scale = pow(2, mipmap_level);
+  for(size_t i = 0; i < mipmap_findings.size(); i++)
+  {
+    // Scale points found on the mipmap image back to original size
+    mipmap_findings[i].second[0] *= scale,
+    mipmap_findings[i].second[1] *= scale,
+    mipmap_findings[i].second[2] *= scale,
+    mipmap_findings[i].second[3] *= scale;
+    temp_tracking.push_back(mipmap_findings[i]);
+  }
+  temp_tracking.insert(temp_tracking.end(), tracking_objects.begin(), tracking_objects.end());
+  // Clear tracking vector,
+  // so we can fill it with objects recognized this frame again
+  tracking_objects.clear();
   // Draw those keypoints we cut
   // because they belonged to a successfully recognized object
   cv::drawKeypoints(mipmap_debug_image, keypoints_cut, mipmap_debug_image, BLUE);
@@ -448,15 +472,9 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
   object_recognizer.getDescriptors(cv_ptr_mono8->image, camera_image_keypoints, camera_image_descriptors);
   // Recognize objects
   std::vector<IDClusterPair> findings;
-  double scale = pow(2, mipmap_level);
-  for(std::vector<IDClusterPair>::iterator it = mipmap_findings.begin(); it != mipmap_findings.end(); it++)
+  for(std::vector<IDClusterPair>::iterator it = temp_tracking.begin(); it != temp_tracking.end(); it++)
   {
     Cluster2f object_points;
-    // Scale points found on the mipmap image back to original size
-    it->second[0] = it->second[0] * scale,
-    it->second[1] = it->second[1] * scale,
-    it->second[2] = it->second[2] * scale,
-    it->second[3] = it->second[3] * scale;
     // Process only the part of the camera image
     // belonging to the area defined by the points we found on the mipmap image
     ObjectRecognizer::ImageInfo cam_img_info;
@@ -469,16 +487,22 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
                                           &camera_image_descriptors,
                                           &keypoints_cut,
                                           &descriptors_cut);
-    camera_image_keypoints   = keypoints_cut;
-    camera_image_descriptors = descriptors_cut;
     // Debug drawings
     draw_rectangle(it->second, YELLOW, camera_debug_image);
     cv::drawKeypoints(camera_debug_image, cam_img_info.keypoints, camera_debug_image, BLUE);
     // Apply object recognizer to the previously processed part of the camera image
     if(object_recognizer.recognize(database_processed[it->first].first, cam_img_info, object_points))
     {
+      // Visualize result
       draw_rectangle(object_points, GREEN, camera_debug_image);
+      // Don't need to check keypoints / descriptors anymore,
+      // they belong to an already successfully recognized object
+      camera_image_keypoints   = keypoints_cut;
+      camera_image_descriptors = descriptors_cut;
+      // We are going to publish this finding later
       findings.push_back(IDClusterPair(it->first, object_points));
+      // Also remember finding as a candidate for next frame
+      tracking_objects.push_back(IDClusterPair(it->first, object_points));
     }
     else
     {
