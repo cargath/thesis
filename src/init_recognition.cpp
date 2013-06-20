@@ -158,12 +158,6 @@ inline float get_depth(const cv::Mat1f& depth_image, const cv::Point2f& point)
   }
 }
 
-inline float get_depth(const cv::Mat1f& depth_image, const Cluster2f& corners)
-{
-  // TODO
-  return 0.0f;
-}
-
 inline void publish_object(const IDClusterPair& finding,
                            const cv::Mat& mono8_image,
                            const cv::Mat1f& depth_image)
@@ -207,10 +201,6 @@ inline void publish_object(const IDClusterPair& finding,
     msg.object_pose.pose.position.x = centroid.x;
     msg.object_pose.pose.position.y = centroid.y;
     msg.object_pose.pose.position.z = centroid.z;
-  }
-  else if(float depth = get_depth(depth_image, finding.second))
-  {
-    // TODO
   }
   else
   {
