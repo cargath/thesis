@@ -45,7 +45,7 @@ using namespace sensor_msgs;
 
 // Config constants
 static const unsigned int MAX_OBJECTS_PER_FRAME = 5;
-static const          int DEFAULT_MIPMAP_LEVEL  = 0;
+static const          int DEFAULT_MIPMAP_LEVEL  = 1;
 
 // Camera orientation seen from the camera POV
 static const cv::Point3f YPR_CAMERA = xyz2ypr(cv::Point3f(0.0f, 0.0f, 1.0f));
@@ -460,7 +460,17 @@ void callback_mipmapping(const Image::ConstPtr& rgb_input,
     // Process only the part of the camera image
     // belonging to the area defined by the points we found on the mipmap image
     ObjectRecognizer::ImageInfo cam_img_info;
-    object_recognizer.getPartialImageInfo(cv_ptr_mono8->image, it->second, cam_img_info, &camera_image_keypoints, &camera_image_descriptors);
+    std::vector<cv::KeyPoint> keypoints_cut;
+    cv::Mat descriptors_cut;
+    object_recognizer.getPartialImageInfo(cv_ptr_mono8->image,
+                                          it->second,
+                                          cam_img_info,
+                                          &camera_image_keypoints,
+                                          &camera_image_descriptors,
+                                          &keypoints_cut,
+                                          &descriptors_cut);
+    camera_image_keypoints   = keypoints_cut;
+    camera_image_descriptors = descriptors_cut;
     // Debug drawings
     draw_rectangle(it->second, YELLOW, camera_debug_image);
     cv::drawKeypoints(camera_debug_image, cam_img_info.keypoints, camera_debug_image, BLUE);

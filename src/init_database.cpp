@@ -309,10 +309,10 @@ int main(int argc, char** argv)
   std::vector<cv::Mat> images;
   std::vector<std::string> filenames;
   image_loader.load_directory(image_path, images, &filenames);
-//  for(size_t i = 0; i < images.size(); i++)
-//  {
-//    add_image(images[i], filenames[i]);
-//  }
+  for(size_t i = 0; i < images.size(); i++)
+  {
+    add_image(images[i], filenames[i]);
+  }
   // Advertise services
   ros::ServiceServer srv_add_directory = nh_private.advertiseService("add_directory", add_directory);
   ros::ServiceServer srv_add_file      = nh_private.advertiseService("add_file",      add_file);

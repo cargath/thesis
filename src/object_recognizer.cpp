@@ -78,7 +78,9 @@ void ObjectRecognizer::getPartialImageInfo(const cv::Mat& image,
                                            const std::vector<cv::Point2f>& corners,
                                            ImageInfo& image_info,
                                            std::vector<cv::KeyPoint>* keypoints,
-                                           cv::Mat* descriptors)
+                                           cv::Mat* descriptors,
+                                           std::vector<cv::KeyPoint>* keypoints_cut,
+                                           cv::Mat* descriptors_cut)
 {
   // Detect all keypoints (if none are given)
   std::vector<cv::KeyPoint> keypoints_all;
@@ -101,6 +103,17 @@ void ObjectRecognizer::getPartialImageInfo(const cv::Mat& image,
       if(descriptors)
       {
         descriptors_filtered.push_back(descriptors->row(i));
+      }
+    }
+    else
+    {
+      if(keypoints_cut)
+      {
+        keypoints_cut->push_back(keypoints_all[i]);
+      }
+      if(descriptors_cut)
+      {
+        descriptors_cut->push_back(descriptors->row(i));
       }
     }
   }

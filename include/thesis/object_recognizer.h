@@ -48,7 +48,9 @@ class ObjectRecognizer
                              const std::vector<cv::Point2f>& corners,
                              ImageInfo& image_info,
                              std::vector<cv::KeyPoint>* keypoints=NULL,
-                             cv::Mat* descriptors=NULL);
+                             cv::Mat* descriptors=NULL,
+                             std::vector<cv::KeyPoint>* keypoints_cut=NULL,
+                             cv::Mat* descriptors_cut=NULL);
     
     //
     void copyImageInfo(const ImageInfo& from, ImageInfo& to);
