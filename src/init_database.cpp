@@ -42,14 +42,37 @@ cv::Size min_image_size,
 typedef std::map<std::string, thesis::Sample> SampleMap;
 SampleMap samples;
 
+// Check if an entry for this ID exists in the database
+bool exists(std::string id)
+{
+  try
+  {
+    samples.at(id);
+  }
+  catch(const std::out_of_range& oor)
+  {
+    return false;
+  }
+  return true;
+}
+
 bool add_image(cv::Mat& image, std::string name)
 {
+  // Check if an image of this name already exists in the database
+  if(exists(name))
+  {
+    ROS_WARN("Error while trying to add an image to the database:");
+    ROS_WARN("  An image of the name '%s' already exists in the database.", name.c_str());
+    ROS_WARN("  Don't add it to the database again.");
+    return false;
+  }
   // Check if image is large enough
   if(image.cols < min_image_size.width || image.rows < min_image_size.height)
   {
-    ROS_WARN("Image '%s' is smaller than %i x %i.",
+    ROS_WARN("Error while trying to add an image to the database:");
+    ROS_WARN("  Image '%s' is smaller than %i x %i.",
              name.c_str(), min_image_size.width, min_image_size.height);
-    ROS_WARN("Don't add it to database.");
+    ROS_WARN("  Don't add it to database.");
     return false;
   }
   // Determine if we need max_image_size in portrait or landscape orientation
@@ -81,8 +104,9 @@ bool add_image(cv::Mat& image, std::string name)
                          image.rows * aspect_ratio_height);
     }
     // ...and resize it accordingly
-    ROS_WARN("Image '%s' is bigger than %i x %i.", name.c_str(), max_image_size.width, max_image_size.height);
-    ROS_WARN("Resizing it to %i x %i.", re_size.width, re_size.height);
+    ROS_INFO("While trying to add an image to the database:");
+    ROS_INFO("  Image '%s' is bigger than %i x %i.", name.c_str(), max_image_size.width, max_image_size.height);
+    ROS_INFO("  Resizing it to %i x %i.", re_size.width, re_size.height);
     cv::resize(image, image_resized, re_size);
   }
   else
@@ -113,7 +137,7 @@ bool add_image(sensor_msgs::Image& image, std::string name)
   {
     cv_ptr = cv_bridge::toCvCopy(image, sensor_msgs::image_encodings::MONO8);
   }
-  catch (cv_bridge::Exception& e)
+  catch(cv_bridge::Exception& e)
   {
     ROS_ERROR("cv_bridge exception: %s", e.what());
     return false;
@@ -160,7 +184,9 @@ bool add_file(thesis::DatabaseAddFile::Request& request,
     }
     else
     {
-      ROS_INFO("Image name empty. Using path name ('%s') instead.", request.path.c_str());
+      ROS_INFO("Add file service:");
+      ROS_INFO("  Image name is empty. Using path name ('%s') instead.",
+               request.path.c_str());
       return add_image(image, request.path);
     }
   }
@@ -175,11 +201,12 @@ bool add_image(thesis::DatabaseAddImg::Request& request,
 {
   if(request.name.length() > 0)
   {
-    // TODO return add_image(request.image, request.name);
+    return add_image(request.image, request.name);
   }
   else
   {
-    ROS_WARN("Don't add image to database, because image name is empty.");
+    ROS_WARN("Add image service:");
+    ROS_WARN("  Image name is empty. Don't add image to database.");
     return false;
   }
 }
@@ -214,14 +241,23 @@ bool get_by_type(thesis::DatabaseGetByID::Request& request,
 bool set_by_type(thesis::DatabaseSetByID::Request& request,
                  thesis::DatabaseSetByID::Response& result)
 {
-  thesis::Sample temp = samples[request.sample.id];
-  if(temp.accuracy < INT_MAX-1)
+  if(exists(request.sample.id))
   {
-    samples[request.sample.id].accuracy++;
+    thesis::Sample temp = samples[request.sample.id];
+    if(temp.accuracy < INT_MAX-1)
+    {
+      samples[request.sample.id].accuracy++;
+    }
+    samples[request.sample.id].width  = (temp.width  * temp.accuracy + request.sample.width)  / (temp.accuracy + 1);
+    samples[request.sample.id].height = (temp.height * temp.accuracy + request.sample.height) / (temp.accuracy + 1);
+    return true;
   }
-  samples[request.sample.id].width  = (temp.width  * temp.accuracy + request.sample.width)  / (temp.accuracy + 1);
-  samples[request.sample.id].height = (temp.height * temp.accuracy + request.sample.height) / (temp.accuracy + 1);
-  return true;
+  else
+  {
+    ROS_WARN("Update entry service:");
+    ROS_WARN("  Could not find an entry for '%s'.", request.sample.id.c_str());
+    return false;
+  }
 }
 
 int main(int argc, char** argv)
@@ -256,25 +292,27 @@ int main(int argc, char** argv)
                    "Got bad image size from OpenNI camera.");
     max_image_size.width  = openni_image_size.width;
     max_image_size.height = openni_image_size.height;
-    ROS_INFO("Got the following image resolution from OpenNI camera: %ix%i",
+    ROS_INFO("Initializing image resolution limits:");
+    ROS_INFO("  Got the following image resolution from OpenNI camera: %ix%i",
              openni_image_size.width, openni_image_size.height);
   }
   else
   {
     nh_private.param("max_image_width",  max_image_size.width,  1280);
     nh_private.param("max_image_height", max_image_size.height, 1024);
-    ROS_INFO("Unable to get image resolution from OpenNI camera.");
-    ROS_INFO("Using default or given max resolution (%ix%i) instead.",
+    ROS_INFO("Initializing image resolution limits:");
+    ROS_INFO("  Unable to get image resolution from OpenNI camera.");
+    ROS_INFO("  Using default or given max resolution (%ix%i) instead.",
              max_image_size.width, max_image_size.height);
   }
   // Create sample database
   std::vector<cv::Mat> images;
   std::vector<std::string> filenames;
   image_loader.load_directory(image_path, images, &filenames);
-  for(size_t i = 0; i < images.size(); i++)
-  {
-    add_image(images[i], filenames[i]);
-  }
+//  for(size_t i = 0; i < images.size(); i++)
+//  {
+//    add_image(images[i], filenames[i]);
+//  }
   // Advertise services
   ros::ServiceServer srv_add_directory = nh_private.advertiseService("add_directory", add_directory);
   ros::ServiceServer srv_add_file      = nh_private.advertiseService("add_file",      add_file);

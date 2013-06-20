@@ -22,6 +22,9 @@ class ImageLoader
     bool load_directory(boost::filesystem::path path,
                         std::vector<cv::Mat>& out_images,
                         std::vector<std::string>* filenames=NULL);
+
+  protected:
+    bool load(const std::string& path, cv::Mat& out_image);
 };
 
 #endif //__IMAGE_LOADER__

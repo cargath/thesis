@@ -16,7 +16,7 @@ ImageLoader::~ImageLoader()
   // Default destructor
 }
 
-bool load_image(const std::string& path, cv::Mat& out_image)
+bool ImageLoader::load(const std::string& path, cv::Mat& out_image)
 {
   out_image = cv::imread(path, CV_LOAD_IMAGE_GRAYSCALE);
   if(!out_image.empty())
@@ -35,7 +35,7 @@ bool ImageLoader::load_image(boost::filesystem::path path, cv::Mat& out_image)
 {
   if(boost::filesystem::exists(path) && !boost::filesystem::is_directory(path))
   {
-    return load_image((std::string) path.string().c_str(), out_image);
+    return load((std::string) path.string().c_str(), out_image);
   }
   else
   {
@@ -61,7 +61,7 @@ bool ImageLoader::load_directory(boost::filesystem::path path,
         if(file_name.length() > 0)
         {
           cv::Mat image;
-          if(load_image(itr->path().string(), image))
+          if(load(itr->path().string(), image))
           {
             out_images.push_back(image);
             if(filenames != NULL)
