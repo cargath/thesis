@@ -6,7 +6,12 @@
 
 #include <thesis/color.h>
 
-#include <opencv2/nonfree/features2d.hpp>
+#ifdef  USE_SIFT_GPU
+  #include <thesis/sift_gpu_wrapper.h>
+#endif
+#ifndef USE_SIFT_GPU
+  #include <opencv2/nonfree/features2d.hpp>
+#endif
 
 class ObjectRecognizer
 {
@@ -17,8 +22,12 @@ class ObjectRecognizer
       int                       width,
                                 height;
       std::vector<cv::KeyPoint> keypoints;
-      cv::Mat                   descriptors;
-      cv::FlannBasedMatcher     matcher;
+      #ifdef  USE_SIFT_GPU
+        std::vector<float>      descriptors;
+      #endif
+      #ifndef USE_SIFT_GPU
+        cv::Mat                 descriptors;
+      #endif
     };
   
     // Default constructor
@@ -26,44 +35,36 @@ class ObjectRecognizer
     // Default destructor
     ~ObjectRecognizer();
 
-    // Use the object recognizers feature detector to compute keypoints.
-    // Call this method if you want to make sure to get compatible keypoints.
-    void getKeypoints(const cv::Mat& image,
-                      std::vector<cv::KeyPoint>& keypoints);
-    
-    // Use the object recognizers descriptor extractor to compute descriptors.
-    // Call this method if you want to make sure to get compatible descriptors.
-    void getDescriptors(const cv::Mat& image,
-                        std::vector<cv::KeyPoint>& keypoints,
-                        cv::Mat& descriptors);
+    /**
+     */
+    void filterImageInfo(const ImageInfo& input,
+                         const std::vector<cv::Point2f>& mask,
+                         ImageInfo* inside_mask,
+                         ImageInfo* outside_mask);
 
-    // Process a sample image (compute keypoints and descriptors)
-    void getImageInfo(const cv::Mat& image,
-                      ImageInfo& image_info,
-                      std::vector<cv::KeyPoint>* keypoints=NULL,
-                      cv::Mat* descriptors=NULL);
+    /**
+     */
+    void getImageInfo(const cv::Mat& image, ImageInfo& image_info);
     
-    // Process a rectangular area of an image given by four corner points
+    /**
+     */
     void getPartialImageInfo(const cv::Mat& image,
-                             const std::vector<cv::Point2f>& corners,
-                             ImageInfo& image_info,
-                             std::vector<cv::KeyPoint>* keypoints=NULL,
-                             cv::Mat* descriptors=NULL,
-                             std::vector<cv::KeyPoint>* keypoints_cut=NULL,
-                             cv::Mat* descriptors_cut=NULL);
+                             const std::vector<cv::Point2f>& mask,
+                             ImageInfo& image_info);
     
-    //
-    void copyImageInfo(const ImageInfo& from, ImageInfo& to);
-    
-    //
+    /**
+     */
     bool recognize(ImageInfo& sample_info,
                    ImageInfo& cam_img_info,
                    std::vector<cv::Point2f>& object_points);
 
   protected:
-    // Reusable OpenCV stuff for working with images
-    cv::SiftFeatureDetector feature_detector;
-    cv::SiftDescriptorExtractor descriptor_extractor;
+    #ifndef USE_SIFT_GPU
+      // Reusable OpenCV stuff for working with images
+      cv::SiftFeatureDetector feature_detector;
+      cv::SiftDescriptorExtractor descriptor_extractor;
+      cv::FlannBasedMatcher flann_matcher;
+    #endif
 };
 
 #endif //__OBJECT_RECOGNIZER__

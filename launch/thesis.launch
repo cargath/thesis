@@ -1,0 +1,14 @@
+<launch>
+  <!-- Database -->
+  <node pkg="thesis" type="init_database" name="thesis_database" output="screen">
+    <param name="image_path" type="str" value="$(find thesis)/img/"/>
+  </node>
+  
+  <!-- Perception -->
+  <node pkg="thesis" type="init_recognition" name="thesis_recognition" output="screen">
+  </node>
+  
+  <!-- Semantic map -->
+  <node pkg="thesis" type="init_mapping" name="init_mapping" output="screen">
+  </node>
+</launch>

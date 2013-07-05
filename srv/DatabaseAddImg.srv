@@ -1,4 +1,4 @@
-sensor_msgs/Image image
-string name
+sensor_msgs/Image[] images
+string[] names
 ---
 # No Response

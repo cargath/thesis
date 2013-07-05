@@ -16,15 +16,24 @@ class ImageLoader
     ~ImageLoader();
     
     // Read a single sample image
-    bool load_image(boost::filesystem::path path, cv::Mat& out_image);
+    bool load_file(const boost::filesystem::path& path,
+                   cv::Mat& out_image,
+                   std::string& out_filename);
     
     // Read all sample images from a directory
-    bool load_directory(boost::filesystem::path path,
+    bool load_directory(const boost::filesystem::path& path,
                         std::vector<cv::Mat>& out_images,
-                        std::vector<std::string>* filenames=NULL);
+                        std::vector<std::string>& out_filenames);
+    
+    // Load image from URL,
+    // automatically determine if URL is a file or a directory
+    bool load_url(const boost::filesystem::path& path,
+                  std::vector<cv::Mat>& out_images,
+                  std::vector<std::string>& out_filenames);
 
   protected:
-    bool load(const std::string& path, cv::Mat& out_image);
+    bool load(const std::string& path,
+              cv::Mat& out_image);
 };
 
 #endif //__IMAGE_LOADER__

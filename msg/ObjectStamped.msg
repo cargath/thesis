@@ -1,3 +1,5 @@
 string object_id
+float64 accuracy
+float64 confidence
 geometry_msgs/PoseStamped object_pose
 geometry_msgs/PoseStamped camera_pose

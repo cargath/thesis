@@ -4,11 +4,17 @@
 
 #include <thesis/object_recognizer.h>
 
-#include <thesis/clock.h>
 #include <thesis/graham_scanner.h>
 #include <thesis/math2d.h>
 
-#include <opencv2/flann/flann.hpp>
+inline void copyImageInfo(const ObjectRecognizer::ImageInfo& from,
+                          ObjectRecognizer::ImageInfo& to)
+{
+  to.width       = from.width;
+  to.height      = from.height;
+  to.keypoints   = from.keypoints;
+  to.descriptors = from.descriptors;
+}
 
 ObjectRecognizer::ObjectRecognizer()
 {
@@ -20,155 +26,168 @@ ObjectRecognizer::~ObjectRecognizer()
   // Default destructor
 }
 
-inline bool x0r(bool a, bool b)
+void ObjectRecognizer::filterImageInfo(const ImageInfo& input,
+                                       const std::vector<cv::Point2f>& mask,
+                                       ImageInfo* inside_mask,
+                                       ImageInfo* outside_mask)
 {
-  return (a && !b) || (b && !a);
-}
-
-void ObjectRecognizer::getKeypoints(const cv::Mat& image,
-                                    std::vector<cv::KeyPoint>& keypoints)
-{
-  feature_detector.detect(image, keypoints);
-}
-
-void ObjectRecognizer::getDescriptors(const cv::Mat& image,
-                                      std::vector<cv::KeyPoint>& keypoints,
-                                      cv::Mat& descriptors)
-{
-  if(!keypoints.empty())
+  ImageInfo temp_inside_mask,
+            temp_outside_mask;
+  // Filter input
+  for(size_t i = 0; i < input.keypoints.size(); i++)
   {
-    descriptor_extractor.compute(image, keypoints, descriptors);
-  }
-}
-
-void ObjectRecognizer::getImageInfo(const cv::Mat& image,
-                                    ImageInfo& image_info,
-                                    std::vector<cv::KeyPoint>* keypoints,
-                                    cv::Mat* descriptors)
-{
-  image_info.width  = image.cols;
-  image_info.height = image.rows;
-  // Detect keypoints
-  if(keypoints)
-  {
-    image_info.keypoints = *keypoints;
-  }
-  else
-  {
-    feature_detector.detect(image, image_info.keypoints);
-  }
-  // Compute descriptors
-  if(descriptors)
-  {
-    image_info.descriptors = *descriptors;
-  }
-  else
-  {
-    if(!image_info.keypoints.empty())
+    if(insideConvexPolygon(mask, input.keypoints[i].pt))
     {
-      descriptor_extractor.compute(image, image_info.keypoints, image_info.descriptors);
-    }
-  }
-  // Train matcher
-  if(!image_info.descriptors.empty())
-  {
-    std::vector<cv::Mat> descriptor_vector;
-    descriptor_vector.push_back(image_info.descriptors);
-    image_info.matcher.clear();
-    image_info.matcher.add(descriptor_vector);
-    image_info.matcher.train();
-  }
-}
-
-void ObjectRecognizer::getPartialImageInfo(const cv::Mat& image,
-                                           const std::vector<cv::Point2f>& corners,
-                                           ImageInfo& image_info,
-                                           std::vector<cv::KeyPoint>* keypoints,
-                                           cv::Mat* descriptors,
-                                           std::vector<cv::KeyPoint>* keypoints_cut,
-                                           cv::Mat* descriptors_cut)
-{
-  // Detect all keypoints (if none are given)
-  std::vector<cv::KeyPoint> keypoints_all;
-  if(keypoints)
-  {
-    keypoints_all = *keypoints;
-  }
-  else
-  {
-    feature_detector.detect(image, keypoints_all);
-  }
-  // Only use keypoints located inside the rectangle defined by the given corners
-  std::vector<cv::KeyPoint> keypoints_filtered;
-  cv::Mat descriptors_filtered;
-  for(size_t i = 0; i < keypoints_all.size(); i++)
-  {
-    if(insideConvexPolygon(corners, keypoints_all[i].pt))
-    {
-      keypoints_filtered.push_back(keypoints_all[i]);
-      if(descriptors)
+      if(inside_mask)
       {
-        descriptors_filtered.push_back(descriptors->row(i));
+        temp_inside_mask.keypoints.push_back(input.keypoints[i]);
+        #ifdef  USE_SIFT_GPU
+          temp_inside_mask.descriptors.push_back(input.descriptors[i]);
+        #endif
+        #ifndef USE_SIFT_GPU
+          temp_inside_mask.descriptors.push_back(input.descriptors.row(i));
+        #endif
       }
     }
     else
     {
-      if(keypoints_cut)
+      if(outside_mask)
       {
-        keypoints_cut->push_back(keypoints_all[i]);
-      }
-      if(descriptors_cut)
-      {
-        descriptors_cut->push_back(descriptors->row(i));
+        temp_outside_mask.keypoints.push_back(input.keypoints[i]);
+        #ifdef  USE_SIFT_GPU
+          temp_outside_mask.descriptors.push_back(input.descriptors[i]);
+        #endif
+        #ifndef USE_SIFT_GPU
+          temp_outside_mask.descriptors.push_back(input.descriptors.row(i));
+        #endif
       }
     }
   }
-  // Return image info for all applicable keypoints
-  if(descriptors)
+  // Output
+  if(inside_mask)
   {
-    getImageInfo(image, image_info, &keypoints_filtered, &descriptors_filtered);
+    inside_mask->width       = input.width;
+    inside_mask->height      = input.height;
+    inside_mask->keypoints   = temp_inside_mask.keypoints;
+    inside_mask->descriptors = temp_inside_mask.descriptors;
   }
-  else
+  if(outside_mask)
   {
-    getImageInfo(image, image_info, &keypoints_filtered);
+    outside_mask->width       = input.width;
+    outside_mask->height      = input.height;
+    outside_mask->keypoints   = temp_outside_mask.keypoints;
+    outside_mask->descriptors = temp_outside_mask.descriptors;
   }
 }
 
-void ObjectRecognizer::copyImageInfo(const ImageInfo& from, ImageInfo& to)
+void ObjectRecognizer::getImageInfo(const cv::Mat& image,
+                                    ImageInfo& image_info)
 {
-  to.width       = from.width;
-  to.height      = from.height;
-  to.keypoints   = from.keypoints;
-  to.descriptors = from.descriptors;
-  to.matcher     = from.matcher;
+  // Remember image size
+  image_info.width  = image.cols;
+  image_info.height = image.rows;
+  // Detect keypoints & descriptors
+  #ifdef  USE_SIFT_GPU
+    SiftGPUWrapper::getInstance()->detect(image, image_info.keypoints, image_info.descriptors);
+  #endif
+  #ifndef USE_SIFT_GPU
+    feature_detector.detect(image, image_info.keypoints);
+    if(!image_info.keypoints.empty())
+    {
+      descriptor_extractor.compute(image, image_info.keypoints, image_info.descriptors);
+    }
+  #endif
+}
+
+void ObjectRecognizer::getPartialImageInfo(const cv::Mat& image,
+                                           const std::vector<cv::Point2f>& mask,
+                                           ImageInfo& image_info)
+{
+  ImageInfo temp_image_info;
+  // Remember image size
+  image_info.width  = image.cols;
+  image_info.height = image.rows;
+  // Detect keypoints & descriptors
+  std::vector<cv::KeyPoint> temp_keypoints;
+  #ifdef  USE_SIFT_GPU
+    std::vector<float> temp_descriptors;
+    // Detect keypoints & compute descriptors
+    SiftGPUWrapper::getInstance()->detect(image, temp_keypoints, temp_descriptors);
+    // Filter keypoints & descriptors
+    for(size_t i = 0; i < temp_keypoints.size(); i++)
+    {
+      if(insideConvexPolygon(mask, temp_keypoints[i].pt))
+      {
+        temp_image_info.keypoints.push_back(temp_keypoints[i]);
+        temp_image_info.descriptors.push_back(temp_descriptors[i]);
+      }
+    }
+  #endif
+  #ifndef USE_SIFT_GPU
+    // Detect keypoints
+    feature_detector.detect(image, temp_keypoints);
+    // Filter keypoints
+    for(size_t i = 0; i < temp_keypoints.size(); i++)
+    {
+      if(insideConvexPolygon(mask, temp_keypoints[i].pt))
+      {
+        temp_image_info.keypoints.push_back(temp_keypoints[i]);
+      }
+    }
+    // Compute descriptors
+    if(!temp_image_info.keypoints.empty())
+    {
+      descriptor_extractor.compute(image, temp_image_info.keypoints, temp_image_info.descriptors);
+    }
+  #endif
+  // Output
+  image_info.keypoints   = temp_image_info.keypoints;
+  image_info.descriptors = temp_image_info.descriptors;
 }
 
 bool ObjectRecognizer::recognize(ImageInfo& sample_info,
                                  ImageInfo& cam_img_info,
                                  std::vector<cv::Point2f>& object_points)
 {
-  std::vector<cv::Mat> train_descriptors = cam_img_info.matcher.getTrainDescriptors();
   // Otherwise an OpenCV assertion would fail for images without keypoints
-  if(cam_img_info.matcher.empty()
-  || train_descriptors.front().rows < 2
-  || sample_info.descriptors.rows   < 2)
+  #ifdef  USE_SIFT_GPU
+    if(sample_info.descriptors.size() < 2 || cam_img_info.descriptors.size() < 2)
+  #endif
+  #ifndef USE_SIFT_GPU
+    if(sample_info.descriptors.rows   < 2 || cam_img_info.descriptors.rows   < 2)
+  #endif
   {
     return false;
   }
-  // Find the k = 2 nearest neighbours
-  std::vector<std::vector<cv::DMatch> > matches;
-  cam_img_info.matcher.knnMatch(sample_info.descriptors, matches, 2);
-  // Filter matches:
-  // By ratio of nearest and second nearest neighbour distance
+  // Compute matches
   std::vector<cv::DMatch> matches_filtered;
-  for(size_t i = 0; i < matches.size(); i++)
-  {
-    float ratio = matches[i][0].distance / matches[i][1].distance;
-    if(ratio < 0.8f)
+  #ifdef  USE_SIFT_GPU
+    // Match descriptors
+    // SiftGPU already implements filtering
+    // - by max distance between two matches
+    // - by ratio of nearest and second nearest neighbour distance
+    // - by checking if two descriptors are a mutual best match
+    SiftGPUWrapper::getInstance()->match(sample_info.descriptors,
+                                         sample_info.descriptors.size(),
+                                         cam_img_info.descriptors,
+                                         cam_img_info.descriptors.size(),
+                                         &matches_filtered);
+  #endif
+  #ifndef USE_SIFT_GPU
+    // Match descriptors (find the k=2 nearest neighbours)
+    std::vector<std::vector<cv::DMatch> > matches;
+    flann_matcher.knnMatch(sample_info.descriptors, cam_img_info.descriptors, matches, 2);
+    // Filter matches:
+    // By ratio of nearest and second nearest neighbour distance
+    for(size_t i = 0; i < matches.size(); i++)
     {
-      matches_filtered.push_back(matches[i][0]);
+      float ratio = matches[i][0].distance / matches[i][1].distance;
+      if(ratio < 0.8f)
+      {
+        matches_filtered.push_back(matches[i][0]);
+      }
     }
-  }
+  #endif
   // Locate objects
   if(matches_filtered.size() >= 4)
   {

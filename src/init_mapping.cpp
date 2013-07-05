@@ -27,7 +27,7 @@
 #include <thesis/MappingGetByPosition.h>
 
 // Transform listener
-tf::TransformListener transform_listener;
+tf::TransformListener* transform_listener;
 
 // Publish transformed object + camera poses for debug purposes
 ros::Publisher object_pose_publisher;
@@ -42,15 +42,15 @@ SemanticMap semantic_map;
 void object_callback(const thesis::ObjectStamped::ConstPtr& input)
 {
   thesis::ObjectStamped transformed;
-  transform_listener.waitForTransform(CAMERA_FRAME, MAP_FRAME, input->camera_pose.header.stamp, TF_TIMEOUT);
+  transform_listener->waitForTransform(CAMERA_FRAME, MAP_FRAME, input->camera_pose.header.stamp, TF_TIMEOUT);
   // Transform recognized camera pose to map frame
-  transform_listener.transformPose(MAP_FRAME, input->camera_pose, transformed.camera_pose);
+  transform_listener->transformPose(MAP_FRAME, input->camera_pose, transformed.camera_pose);
   transformed.camera_pose.header.stamp = ros::Time(0);
   camera_pose_publisher.publish(transformed.camera_pose);
   // If available, transform recognized object pose to map frame
   if(!isnan(input->object_pose.pose.position.z))
   {
-    transform_listener.transformPose(MAP_FRAME, input->object_pose, transformed.object_pose);
+    transform_listener->transformPose(MAP_FRAME, input->object_pose, transformed.object_pose);
     transformed.object_pose.header.stamp = ros::Time(0);
     object_pose_publisher.publish(transformed.object_pose);
   }
@@ -102,7 +102,10 @@ int main(int argc, char** argv)
   ros::init(argc, argv, "thesis_mapping");
   ros::NodeHandle nh;
   ros::NodeHandle nh_private("~");
+  // Create transform listener
+  transform_listener = new tf::TransformListener();
   // Initialize reusable service clients
+  ros::service::waitForService("thesis_database/get_by_type", -1);
   db_get_by_type_client = nh.serviceClient<thesis::DatabaseGetByID>("thesis_database/get_by_type");
   // Subscribe to relevant topics
   ros::Subscriber object_subscriber = nh.subscribe("thesis_recognition/objects", 1, object_callback);
@@ -115,6 +118,8 @@ int main(int argc, char** argv)
   ros::ServiceServer srv_by_position = nh_private.advertiseService("by_position", get_by_position);
   // Spin
   ros::spin();
+  // Free memory
+  delete transform_listener;
   // Exit
   return 0;
 }

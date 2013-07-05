@@ -9,9 +9,10 @@
 class GrahamScanner
 {
   public:
-    static void grahamScan(std::vector<cv::Point2f>& input, std::vector<cv::Point2f>& output);
-    
     static cv::Point2f p0;
+  
+    static void grahamScan(std::vector<cv::Point2f>& input,
+                           std::vector<cv::Point2f>& output);
 };
 
 #endif //__GRAHAM_SCANNER__

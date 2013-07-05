@@ -4,11 +4,9 @@
 #ifndef __MATH2D__
 #define __MATH2D__
 
-#include <opencv2/opencv.hpp>
+#include <thesis/math.h>
 
-// Angular dimensions
-static const double RAD = 180.0 / CV_PI;
-static const double DEG = CV_PI / 180.0;
+#include <opencv2/opencv.hpp>
 
 /**
  * @return The determinant.
@@ -21,7 +19,7 @@ inline float det2f(const cv::Point2f& a, const cv::Point2f& b, const cv::Point2f
 /**
  * @return Angle between a->b and the x-axis in degrees (0 - 180).
  */
-static inline float angle2f(const cv::Point2f& a, const cv::Point2f& b)
+inline float angle2f(const cv::Point2f& a, const cv::Point2f& b)
 {
   if(b.x == a.x)
   {
@@ -30,7 +28,7 @@ static inline float angle2f(const cv::Point2f& a, const cv::Point2f& b)
   float m = (b.y - a.y) / (b.x - a.x);
   if(m < 0)
   {
-    return 180 + atan(m) * RAD;
+    return 180.0f + atan(m) * RAD;
   }
   return atan(m) * RAD;
 }

@@ -5,6 +5,9 @@
 // This is a ROS project
 #include <ros/ros.h>
 
+// Local headers
+#include <thesis/image_loader.h>
+
 // Since we use OpenCV to load image files,
 // we need to convert them to ROS messages
 #include <cv_bridge/cv_bridge.h>
@@ -13,13 +16,13 @@
 // We try to get the image size of an OpenNI camera (if available)
 #include <sensor_msgs/CameraInfo.h>
 
-// Local headers
-#include <thesis/image_loader.h>
+// Empty message to inform subscribing nodes about changes
+#include <std_msgs/Empty.h>
 
 // This node provides these services
-#include <thesis/DatabaseAddDir.h>
 #include <thesis/DatabaseAddFile.h>
 #include <thesis/DatabaseAddImg.h>
+#include <thesis/DatabaseAddURL.h>
 #include <thesis/DatabaseGetAll.h>
 #include <thesis/DatabaseGetByID.h>
 #include <thesis/DatabaseList.h>
@@ -42,6 +45,9 @@ cv::Size min_image_size,
 typedef std::map<std::string, thesis::Sample> SampleMap;
 SampleMap samples;
 
+// We are going to inform subscribing nodes about changes
+ros::Publisher update_publisher;
+
 // Check if an entry for this ID exists in the database
 bool exists(std::string id)
 {
@@ -58,6 +64,14 @@ bool exists(std::string id)
 
 bool add_image(cv::Mat& image, std::string name)
 {
+  // Check if image name is valid
+  if(!(name.length() > 0))
+  {
+    ROS_WARN("Error while trying to add an image to the database:");
+    ROS_WARN("  Image name empty.");
+    ROS_WARN("  Don't add it to the database.");
+    return false;
+  }
   // Check if an image of this name already exists in the database
   if(exists(name))
   {
@@ -153,66 +167,60 @@ void callback_openni_once(const sensor_msgs::CameraInfo::ConstPtr& input)
   openni_once = true;
 }
 
-bool add_directory(thesis::DatabaseAddDir::Request& request,
-                   thesis::DatabaseAddDir::Response& result)
+bool callback_add_urls(thesis::DatabaseAddURL::Request& request,
+                       thesis::DatabaseAddURL::Response& result)
 {
-  std::vector<cv::Mat> images;
-  std::vector<std::string> filenames;
-  if(image_loader.load_directory(request.path, images, &filenames))
+  for(size_t i = 0; i < request.urls.size(); i++)
   {
-    for(size_t i = 0; i < images.size(); i++)
+    std::vector<cv::Mat> images;
+    std::vector<std::string> filenames;
+    if(image_loader.load_url(request.urls[i], images, filenames))
     {
-      add_image(images[i], filenames[i]);
-    }
-    return true;
-  }
-  else
-  {
-    return false;
-  }
-}
-
-bool add_file(thesis::DatabaseAddFile::Request& request,
-              thesis::DatabaseAddFile::Response& result)
-{
-  cv::Mat image;
-  if(image_loader.load_image(request.path, image))
-  {
-    if(request.name.length() > 0)
-    {
-      return add_image(image, request.name);
-    }
-    else
-    {
-      ROS_INFO("Add file service:");
-      ROS_INFO("  Image name is empty. Using path name ('%s') instead.",
-               request.path.c_str());
-      return add_image(image, request.path);
+      for(size_t j = 0; j < images.size(); j++)
+      {
+        add_image(images[j], filenames[j]);
+      }
     }
   }
-  else
-  {
-    return false;
-  }
+  return true;
 }
 
-bool add_image(thesis::DatabaseAddImg::Request& request,
-               thesis::DatabaseAddImg::Response& result)
+bool callback_add_files(thesis::DatabaseAddFile::Request& request,
+                        thesis::DatabaseAddFile::Response& result)
 {
-  if(request.name.length() > 0)
+  for(size_t i = 0; i < request.urls.size(); i++)
   {
-    return add_image(request.image, request.name);
+    cv::Mat image;
+    std::string filename;
+    if(image_loader.load_file(request.urls[i], image, filename))
+    {
+      if(request.names.size() >= i && request.names[i].length() > 0)
+      {
+        add_image(image, request.names[i]);
+      }
+      else
+      {
+        ROS_INFO("Add file service:");
+        ROS_INFO("  Image name is empty. Using filename ('%s') instead.", filename.c_str());
+        add_image(image, filename);
+      }
+    }
   }
-  else
-  {
-    ROS_WARN("Add image service:");
-    ROS_WARN("  Image name is empty. Don't add image to database.");
-    return false;
-  }
+  return true;
 }
 
-bool get_list(thesis::DatabaseList::Request& request,
-              thesis::DatabaseList::Response& result)
+bool callback_add_images(thesis::DatabaseAddImg::Request& request,
+                         thesis::DatabaseAddImg::Response& result)
+{
+  for(size_t i = 0; i < request.images.size(); i++)
+  {
+    add_image(request.images[i], request.names[i]);
+  }
+  return true;
+}
+
+bool callback_get_list(thesis::DatabaseList::Request& request,
+                       thesis::DatabaseList::Response& result)
 {
   for(SampleMap::iterator it = samples.begin(); it != samples.end(); it++)
   {
@@ -221,8 +229,8 @@ bool get_list(thesis::DatabaseList::Request& request,
   return true;
 }
 
-bool get_all(thesis::DatabaseGetAll::Request& request,
-             thesis::DatabaseGetAll::Response& result)
+bool callback_get_all(thesis::DatabaseGetAll::Request& request,
+                      thesis::DatabaseGetAll::Response& result)
 {
   for(SampleMap::iterator it = samples.begin(); it != samples.end(); it++)
   {
@@ -231,20 +239,20 @@ bool get_all(thesis::DatabaseGetAll::Request& request,
   return true;
 }
 
-bool get_by_type(thesis::DatabaseGetByID::Request& request,
-                 thesis::DatabaseGetByID::Response& result)
+bool callback_get_by_type(thesis::DatabaseGetByID::Request& request,
+                          thesis::DatabaseGetByID::Response& result)
 {
   result.sample = samples[request.id];
   return true;
 }
 
-bool set_by_type(thesis::DatabaseSetByID::Request& request,
-                 thesis::DatabaseSetByID::Response& result)
+bool callback_set_by_type(thesis::DatabaseSetByID::Request& request,
+                          thesis::DatabaseSetByID::Response& result)
 {
   if(exists(request.sample.id))
   {
     thesis::Sample temp = samples[request.sample.id];
-    if(temp.accuracy < INT_MAX-1)
+    if(temp.accuracy < INT_MAX - 2)
     {
       samples[request.sample.id].accuracy++;
     }
@@ -308,19 +316,21 @@ int main(int argc, char** argv)
   // Create sample database
   std::vector<cv::Mat> images;
   std::vector<std::string> filenames;
-  image_loader.load_directory(image_path, images, &filenames);
+  image_loader.load_directory(image_path, images, filenames);
   for(size_t i = 0; i < images.size(); i++)
   {
     add_image(images[i], filenames[i]);
   }
   // Advertise services
-  ros::ServiceServer srv_add_directory = nh_private.advertiseService("add_directory", add_directory);
-  ros::ServiceServer srv_add_file      = nh_private.advertiseService("add_file",      add_file);
-  ros::ServiceServer srv_add_image     = nh_private.advertiseService("add_image",     add_image);
-  ros::ServiceServer srv_get_list      = nh_private.advertiseService("get_list",      get_list);
-  ros::ServiceServer srv_get_all       = nh_private.advertiseService("get_all",       get_all);
-  ros::ServiceServer srv_get_by_type   = nh_private.advertiseService("get_by_type",   get_by_type);
-  ros::ServiceServer srv_set_by_type   = nh_private.advertiseService("set_by_type",   set_by_type);
+  ros::ServiceServer srv_add_urls    = nh_private.advertiseService("add_urls",    callback_add_urls);
+  ros::ServiceServer srv_add_files   = nh_private.advertiseService("add_files",   callback_add_files);
+  ros::ServiceServer srv_add_images  = nh_private.advertiseService("add_images",  callback_add_images);
+  ros::ServiceServer srv_get_list    = nh_private.advertiseService("get_list",    callback_get_list);
+  ros::ServiceServer srv_get_all     = nh_private.advertiseService("get_all",     callback_get_all);
+  ros::ServiceServer srv_get_by_type = nh_private.advertiseService("get_by_type", callback_get_by_type);
+  ros::ServiceServer srv_set_by_type = nh_private.advertiseService("set_by_type", callback_set_by_type);
+  // We are going to inform subscribing nodes about changes
+  update_publisher = nh_private.advertise<std_msgs::Empty>("updates", 10);
   // Spin
   ros::spin();
   // Exit
