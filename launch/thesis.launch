@@ -1,4 +1,14 @@
 <launch>
+  <!-- Global parameters -->
+  <rosparam>
+    thesis/rgb_image_topic: 'camera/rgb/image_rect_color'
+    thesis/depth_image_topic: 'camera/depth_registered/image_rect'
+    thesis/camera_info_topic: 'camera/depth_registered/camera_info'
+    thesis/camera_frame: '/head_mount_kinect_rgb_optical_frame'
+    thesis/map_frame: '/map'
+    thesis/tf_timeout: 0.5
+  </rosparam>
+
   <!-- Database -->
   <node pkg="thesis" type="init_database" name="thesis_database" output="screen">
     <param name="image_path" type="str" value="$(find thesis)/img/"/>
@@ -6,6 +16,8 @@
   
   <!-- Perception -->
   <node pkg="thesis" type="init_recognition" name="thesis_recognition" output="screen">
+    <param name="mipmap_level" type="int" value="1"/>
+    <param name="max_objects_per_frame" type="int" value="5"/>
   </node>
   
   <!-- Semantic map -->

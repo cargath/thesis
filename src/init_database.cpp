@@ -277,9 +277,12 @@ int main(int argc, char** argv)
   // Get path to image directory
   std::string image_path;
   nh_private.param("image_path", image_path, std::string("img"));
+  ROS_INFO("Database: ");
+  ROS_INFO("  Sample image path: %s.", image_path.c_str());
   // Try to get OpenNI camera image size
   std::string camera_info_topic;
-  nh.param("camera_info_topic", camera_info_topic, std::string("camera/depth_registered/camera_info"));
+  nh.getParam("/thesis/camera_info_topic", camera_info_topic);
+  ROS_INFO("  Camera info topic: %s.", camera_info_topic.c_str());
   ros::Subscriber camera_info_subscriber = nh.subscribe(camera_info_topic, 1, callback_openni_once);
   ros::Time wait_time = ros::Time::now();
   while(!openni_once)

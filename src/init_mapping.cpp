@@ -6,7 +6,6 @@
 #include <ros/ros.h>
 
 // Local headers
-#include <thesis/config.h>
 #include <thesis/semantic_map.h>
 
 // We are working with TF
@@ -19,19 +18,24 @@
 #include <thesis/DatabaseGetByID.h>
 
 // We are going to publish object poses for debug purposes
-#include <geometry_msgs/Pose.h>
+#include <visualization_msgs/Marker.h>
 
 // This node provides these services
 #include <thesis/MappingGetAll.h>
 #include <thesis/MappingGetByID.h>
 #include <thesis/MappingGetByPosition.h>
 
+// Config parameters
+std::string camera_frame,
+            map_frame;
+            
+double      tf_timeout;
+
 // Transform listener
 tf::TransformListener* transform_listener;
 
 // Publish transformed object + camera poses for debug purposes
 ros::Publisher object_pose_publisher;
-ros::Publisher camera_pose_publisher;
 
 // Reusable service clients
 ros::ServiceClient db_get_by_type_client;
@@ -42,17 +46,38 @@ SemanticMap semantic_map;
 void object_callback(const thesis::ObjectStamped::ConstPtr& input)
 {
   thesis::ObjectStamped transformed;
-  transform_listener->waitForTransform(CAMERA_FRAME, MAP_FRAME, input->camera_pose.header.stamp, TF_TIMEOUT);
+  transform_listener->waitForTransform(camera_frame, map_frame, input->camera_pose.header.stamp, ros::Duration(tf_timeout));
   // Transform recognized camera pose to map frame
-  transform_listener->transformPose(MAP_FRAME, input->camera_pose, transformed.camera_pose);
+  transform_listener->transformPose(map_frame, input->camera_pose, transformed.camera_pose);
   transformed.camera_pose.header.stamp = ros::Time(0);
-  camera_pose_publisher.publish(transformed.camera_pose);
   // If available, transform recognized object pose to map frame
   if(!isnan(input->object_pose.pose.position.z))
   {
-    transform_listener->transformPose(MAP_FRAME, input->object_pose, transformed.object_pose);
+    transform_listener->transformPose(map_frame, input->object_pose, transformed.object_pose);
     transformed.object_pose.header.stamp = ros::Time(0);
-    object_pose_publisher.publish(transformed.object_pose);
+    // Visualize object pose
+    visualization_msgs::Marker object_marker;
+    
+    object_marker.ns              = "my_namespace";
+    object_marker.id              = 0;
+    
+    object_marker.header.frame_id = transformed.object_pose.header.frame_id;
+    object_marker.header.stamp    = ros::Time();
+    object_marker.pose            = transformed.object_pose.pose;
+    
+    object_marker.action          = visualization_msgs::Marker::ADD;
+    object_marker.type            = visualization_msgs::Marker::CUBE;
+    
+    object_marker.scale.x         = 1.0;
+    object_marker.scale.y         = 0.1;
+    object_marker.scale.z         = 0.1;
+    
+    object_marker.color.a         = 1.0;
+    object_marker.color.r         = 0.0;
+    object_marker.color.g         = 1.0;
+    object_marker.color.b         = 0.0;
+    
+    object_pose_publisher.publish(object_marker);
   }
   // Add transformed object to map
   thesis::DatabaseGetByID db_get_by_type_service;
@@ -102,6 +127,17 @@ int main(int argc, char** argv)
   ros::init(argc, argv, "thesis_mapping");
   ros::NodeHandle nh;
   ros::NodeHandle nh_private("~");
+  
+  // Get global parameters
+  nh.getParam("/thesis/camera_frame", camera_frame);
+  nh.getParam("/thesis/map_frame",    map_frame);
+  nh.getParam("/thesis/tf_timeout",   tf_timeout);
+  
+  ROS_INFO("Mapping: ");
+  ROS_INFO("  Camera frame: %s.", camera_frame.c_str());
+  ROS_INFO("  Map frame:    %s.", map_frame.c_str());
+  ROS_INFO("  TF timeout:   %f.", tf_timeout);
+  
   // Create transform listener
   transform_listener = new tf::TransformListener();
   // Initialize reusable service clients
@@ -110,8 +146,7 @@ int main(int argc, char** argv)
   // Subscribe to relevant topics
   ros::Subscriber object_subscriber = nh.subscribe("thesis_recognition/objects", 1, object_callback);
   // Publish transformed object + camera poses for debug purposes
-  object_pose_publisher = nh_private.advertise<geometry_msgs::PoseStamped>("object_pose", 1);
-  camera_pose_publisher = nh_private.advertise<geometry_msgs::PoseStamped>("camera_pose", 1);
+  object_pose_publisher = nh_private.advertise<visualization_msgs::Marker>("vis_object_pose", 1);
   // Advertise services
   ros::ServiceServer srv_all         = nh_private.advertiseService("all", get_all);
   ros::ServiceServer srv_by_type     = nh_private.advertiseService("by_type", get_by_type);

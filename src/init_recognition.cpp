@@ -11,7 +11,6 @@
 #include <image_geometry/pinhole_camera_model.h>
 
 // Local headers
-#include <thesis/config.h>
 #include <thesis/math2d.h>
 #include <thesis/math3d.h>
 #include <thesis/object_recognizer.h>
@@ -44,18 +43,18 @@ using namespace sensor_msgs;
 #define CAMERA_DEBUG_IMAGE_WINDOW "Camera Debug Image"
 #define MIPMAP_DEBUG_IMAGE_WINDOW "Mipmap Debug Image"
 
-// Config constants
-static const unsigned int MAX_OBJECTS_PER_FRAME = 5;
-static const          int DEFAULT_MIPMAP_LEVEL  = 1;
+// Config parameters
+std::string camera_frame,
+            map_frame;
+            
+int         mipmap_level,
+            max_objects_per_frame;
 
 // Camera orientation seen from the camera POV
 static const cv::Point3f YPR_CAMERA = xyz2ypr(cv::Point3f(0.0f, 0.0f, 1.0f));
 
 // FPS counter for debugging purposes
 FPSCalculator fps_calculator;
-
-// Number of mipmaps to create
-int mipmap_level;
 
 // Recognized-Objects Publisher
 ros::Publisher object_publisher;
@@ -220,9 +219,9 @@ inline void publish_object(const IDClusterPair& finding,
   thesis::ObjectStamped msg;
   msg.object_id = finding.first;
   msg.object_pose.header.stamp     = ros::Time::now();
-  msg.object_pose.header.frame_id  = CAMERA_FRAME;
+  msg.object_pose.header.frame_id  = camera_frame;
   msg.camera_pose.header.stamp     = msg.object_pose.header.stamp;
-  msg.camera_pose.header.frame_id  = CAMERA_FRAME;
+  msg.camera_pose.header.frame_id  = camera_frame;
   msg.camera_pose.pose.position.x  = 0;
   msg.camera_pose.pose.position.y  = 0;
   msg.camera_pose.pose.position.z  = 0;
@@ -262,7 +261,7 @@ inline void publish_object(const IDClusterPair& finding,
     // Fill object pose with placeholders instead of throwing it away
     // (camera pose - see below - might still be useful)
     msg.object_pose.header.stamp    = ros::Time(0);
-    msg.object_pose.header.frame_id = MAP_FRAME;
+    msg.object_pose.header.frame_id = map_frame;
     msg.object_pose.pose.position.x = NAN;
     msg.object_pose.pose.position.y = NAN;
     msg.object_pose.pose.position.z = NAN;
@@ -369,7 +368,7 @@ void callback_simple(const cv::Mat& camera_image,
               it->second.first,
               camera_image,
               cam_img_info,
-              MAX_OBJECTS_PER_FRAME,
+              max_objects_per_frame,
               findings,
               camera_debug_image);
   }
@@ -402,7 +401,7 @@ void callback_mipmapping(const cv::Mat& camera_image,
               it->second.second,
               camera_image,
               cam_img_mipmap_info,
-              MAX_OBJECTS_PER_FRAME,
+              max_objects_per_frame,
               mipmap_findings,
               mipmap_debug_image);
   }
@@ -553,27 +552,44 @@ int main(int argc, char** argv)
   // Create debug image window
   cv::namedWindow(CAMERA_DEBUG_IMAGE_WINDOW);
   cv::namedWindow(MIPMAP_DEBUG_IMAGE_WINDOW);
-  // Get number of mipmaps from parameter server
-  int mipmaps;
-  nh.param("mipmap_level", mipmaps, DEFAULT_MIPMAP_LEVEL);
+  
+  // Get global parameters
+  std::string rgb_image_topic,
+              depth_image_topic,
+              camera_info_topic;
+  
+  nh.getParam("/thesis/rgb_image_topic",   rgb_image_topic);
+  nh.getParam("/thesis/depth_image_topic", depth_image_topic);
+  nh.getParam("/thesis/camera_info_topic", camera_info_topic);
+  nh.getParam("/thesis/camera_frame",      camera_frame);
+  nh.getParam("/thesis/map_frame",         map_frame);
+  
+  ROS_INFO("Perception: ");
+  ROS_INFO("  RGB image topic:   %s.", rgb_image_topic.c_str());
+  ROS_INFO("  Depth image topic: %s.", depth_image_topic.c_str());
+  ROS_INFO("  Camera info topic: %s.", camera_info_topic.c_str());
+  ROS_INFO("  Camera frame:      %s.", camera_frame.c_str());
+  ROS_INFO("  Map frame:         %s.", map_frame.c_str());
+  
+  // Get local parameters
+  nh_private.param("mipmap_level", mipmap_level, 0);
+  nh_private.param("max_objects_per_frame", max_objects_per_frame, 1);
+  ROS_INFO("  Mipmap level: %i.", mipmap_level);
+  ROS_INFO("  Max objects per frame: %i.", max_objects_per_frame);
+  
   // Initialize reusable service clients
   ros::service::waitForService("thesis_database/get_all", -1);
   db_get_all_client = nh.serviceClient<thesis::DatabaseGetAll>("thesis_database/get_all");
   ros::service::waitForService("thesis_database/set_by_type", -1);
   db_set_by_type_client = nh.serviceClient<thesis::DatabaseSetByID>("thesis_database/set_by_type");
+  
   // Create image database
-  reset(mipmaps);
-  // Enable user to change topics (to run the node on different devices)
-  std::string rgb_topic,
-              depth_topic,
-              cam_info_topic;
-  nh.param("rgb_topic", rgb_topic, std::string("camera/rgb/image_rect_color"));
-  nh.param("depth_topic", depth_topic, std::string("camera/depth_registered/image_rect"));
-  nh.param("cam_info_topic", cam_info_topic, std::string("camera/depth_registered/camera_info"));
+  reset(mipmap_level);
+
   // Subscribe to relevant OpenNI topics
-  Subscriber<Image> rgb_subscriber(nh, rgb_topic, 1);
-  Subscriber<Image> depth_subscriber(nh, depth_topic, 1);
-  Subscriber<CameraInfo> cam_info_subscriber(nh, cam_info_topic, 1);
+  Subscriber<Image> rgb_subscriber(nh, rgb_image_topic, 1);
+  Subscriber<Image> depth_subscriber(nh, depth_image_topic, 1);
+  Subscriber<CameraInfo> cam_info_subscriber(nh, camera_info_topic, 1);
   // Use one time-sychronized callback for all OpenNI subscriptions
   typedef sync_policies::ApproximateTime<Image, Image, CameraInfo> SyncPolicy;
   Synchronizer<SyncPolicy> synchronizer(SyncPolicy(10), rgb_subscriber, depth_subscriber, cam_info_subscriber);
