@@ -45,6 +45,7 @@ SemanticMap semantic_map;
 
 void object_callback(const thesis::ObjectStamped::ConstPtr& input)
 {
+  ROS_INFO("Mapping: Object callback.");
   thesis::ObjectStamped transformed;
   transform_listener->waitForTransform(camera_frame, map_frame, input->camera_pose.header.stamp, ros::Duration(tf_timeout));
   // Transform recognized camera pose to map frame
@@ -53,6 +54,8 @@ void object_callback(const thesis::ObjectStamped::ConstPtr& input)
   // If available, transform recognized object pose to map frame
   if(!isnan(input->object_pose.pose.position.z))
   {
+    ROS_INFO("Mapping: Object caught.");
+  
     transform_listener->transformPose(map_frame, input->object_pose, transformed.object_pose);
     transformed.object_pose.header.stamp = ros::Time(0);
     // Visualize object pose
@@ -61,7 +64,7 @@ void object_callback(const thesis::ObjectStamped::ConstPtr& input)
     object_marker.ns              = "my_namespace";
     object_marker.id              = 0;
     
-    object_marker.header.frame_id = transformed.object_pose.header.frame_id;
+    object_marker.header.frame_id = map_frame;
     object_marker.header.stamp    = ros::Time();
     object_marker.pose            = transformed.object_pose.pose;
     
@@ -69,8 +72,8 @@ void object_callback(const thesis::ObjectStamped::ConstPtr& input)
     object_marker.type            = visualization_msgs::Marker::CUBE;
     
     object_marker.scale.x         = 1.0;
-    object_marker.scale.y         = 0.1;
-    object_marker.scale.z         = 0.1;
+    object_marker.scale.y         = 1.0;
+    object_marker.scale.z         = 1.0;
     
     object_marker.color.a         = 1.0;
     object_marker.color.r         = 0.0;

@@ -353,7 +353,7 @@ inline void recognize(const std::string& sample_id,
 
 void callback_simple(const cv::Mat& camera_image,
                      cv::Mat& camera_debug_image,
-                     std::vector<IDClusterPair> findings)
+                     std::vector<IDClusterPair>& findings)
 {
   // Process camera image
   ObjectRecognizer::ImageInfo cam_img_info;
@@ -379,7 +379,7 @@ void callback_simple(const cv::Mat& camera_image,
 
 void callback_mipmapping(const cv::Mat& camera_image,
                          cv::Mat& camera_debug_image,
-                         std::vector<IDClusterPair> findings)
+                         std::vector<IDClusterPair>& findings)
 {
   // Create mipmap of camera image
   cv::Mat cam_img_mipmap;

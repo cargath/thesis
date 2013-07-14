@@ -4,10 +4,15 @@
     thesis/rgb_image_topic: 'camera/rgb/image_rect_color'
     thesis/depth_image_topic: 'camera/depth_registered/image_rect'
     thesis/camera_info_topic: 'camera/depth_registered/camera_info'
-    thesis/camera_frame: '/head_mount_kinect_rgb_optical_frame'
+    thesis/camera_frame: '/head_mount_kinect_rgb_optical_frame' <!-- /head_mount_kinect_rgb_optical_frame -->
     thesis/map_frame: '/map'
     thesis/tf_timeout: 0.5
   </rosparam>
+
+  <!-- Camera coordinates, 30fps -->
+  <node pkg="tf" type="static_transform_publisher" name="rgb_frame_kinect" args="0 0 0 0 0 0 /map /head_mount_kinect_rgb_optical_frame 33"/>
+  <!-- node pkg="tf" type="static_transform_publisher" name="rgb_frame_kinect"         args="0 0 0 0 0 0 /map /camera_rgb_frame 33"/-->
+  <!-- node pkg="tf" type="static_transform_publisher" name="rgb_optical_frame_kinect" args="0 0 0 0 0 0 /map /camera_rgb_optical_frame 33"/-->
 
   <!-- Database -->
   <node pkg="thesis" type="init_database" name="thesis_database" output="screen">
