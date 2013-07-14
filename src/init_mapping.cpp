@@ -55,7 +55,13 @@ void object_callback(const thesis::ObjectStamped::ConstPtr& input)
   if(!isnan(input->object_pose.pose.position.z))
   {
     ROS_INFO("Mapping: Object caught.");
-  
+    
+    std::cout << "Object position:         " << input->object_pose.pose.position.x         << ", " << input->object_pose.pose.position.y         << ", " << input->object_pose.pose.position.z         << std::endl;
+    std::cout << "Transformed position:    " << transformed.object_pose.pose.position.x    << ", " << transformed.object_pose.pose.position.y    << ", " << transformed.object_pose.pose.position.z    << std::endl;
+    std::cout << "Object orientation:      " << input->object_pose.pose.orientation.x      << ", " << input->object_pose.pose.orientation.y      << ", " << input->object_pose.pose.orientation.z      << ", " << input->object_pose.pose.orientation.w      << std::endl;
+    std::cout << "Transformed orientation: " << transformed.object_pose.pose.orientation.x << ", " << transformed.object_pose.pose.orientation.y << ", " << transformed.object_pose.pose.orientation.z << ", " << transformed.object_pose.pose.orientation.w << std::endl;
+    std::cout << std::endl;
+    
     transform_listener->transformPose(map_frame, input->object_pose, transformed.object_pose);
     transformed.object_pose.header.stamp = ros::Time(0);
     // Visualize object pose

@@ -166,15 +166,21 @@ inline bool call_db_set_by_type(std::string id, float width, float height)
 
 inline geometry_msgs::Quaternion quaternion_from_plane(cv::Point3f w, cv::Point3f h)
 {
+  ROS_INFO("w:   (%f, %f, %f)", w.x, w.y, w.z);
+  ROS_INFO("h:   (%f, %f, %f)", h.x, h.y, h.z);
   // Calculate the cross product of the given sides of the plane
   cv::Point3f c = cross3f(w, h);
+  ROS_INFO("c:   (%f, %f, %f)", c.x, c.y, c.z);
   // Normalize surface normal
   cv::Point3f n = norm3f(c);
+  ROS_INFO("n:   (%f, %f, %f)", n.x, n.y, n.z);
   // If the camera successfully recognizes an object,
   // the object obviously faces the camera
-  cv::Point3f n_ = abs(n);
+  n.z = fabs(n.z);
+  ROS_INFO("abs: (%f, %f, %f)", n.x, n.y, n.z);
   // Convert direction vector (surface normal) to Euler angles
-  cv::Point3f ypr = xyz2ypr(n_);
+  cv::Point3f ypr = xyz2ypr(n);
+  ROS_INFO("ypr: (%f, %f, %f)", ypr.x, ypr.y, ypr.z);
   // Convert Euler angles to quaternion
   return tf::createQuaternionMsgFromRollPitchYaw(ypr.z, ypr.y, ypr.x);
 }
@@ -296,6 +302,7 @@ inline void publish_object(const IDClusterPair& finding,
   // Get object orientation & dimensions in camera coordinate space
   if(!(isnan(w) || isnan(h)))
   {
+    ROS_INFO("Perception: !(isnan(w) || isnan(h)) == true");
     // Update database with their dimensions
     if(!call_db_set_by_type(finding.first, mag3f(w), mag3f(h)))
     {
@@ -306,6 +313,7 @@ inline void publish_object(const IDClusterPair& finding,
   }
   else
   {
+    ROS_INFO("Perception: !(isnan(w) || isnan(h)) == false");
     msg.object_pose.pose.orientation.x = NAN;
     msg.object_pose.pose.orientation.y = NAN;
     msg.object_pose.pose.orientation.z = NAN;

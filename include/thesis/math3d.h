@@ -11,15 +11,6 @@ inline bool isnan(cv::Point3f p)
   return isnan(p.x * p.y * p.z);
 }
 
-inline cv::Point3f abs(cv::Point3f p)
-{
-  cv::Point3f p_;
-  p_.x = abs(p.x);
-  p_.y = abs(p.y);
-  p_.z = abs(p.z);
-  return p_;
-}
-
 inline cv::Point3f cross3f(cv::Point3f a, cv::Point3f b)
 {
   cv::Point3f c;
