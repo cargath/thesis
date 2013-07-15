@@ -17,9 +17,6 @@
 // We want to call these services
 #include <thesis/DatabaseGetByID.h>
 
-// We are going to publish object poses for debug purposes
-#include <visualization_msgs/Marker.h>
-
 // This node provides these services
 #include <thesis/MappingGetAll.h>
 #include <thesis/MappingGetByID.h>
@@ -33,9 +30,6 @@ double      tf_timeout;
 
 // Transform listener
 tf::TransformListener* transform_listener;
-
-// Publish transformed object + camera poses for debug purposes
-ros::Publisher object_pose_publisher;
 
 // Reusable service clients
 ros::ServiceClient db_get_by_type_client;
@@ -56,51 +50,34 @@ void object_callback(const thesis::ObjectStamped::ConstPtr& input)
   {
     ROS_INFO("Mapping: Object caught.");
     
+    transform_listener->transformPose(map_frame, input->object_pose, transformed.object_pose);
+    transformed.object_pose.header.stamp = ros::Time(0);
+    
     std::cout << "Object position:         " << input->object_pose.pose.position.x         << ", " << input->object_pose.pose.position.y         << ", " << input->object_pose.pose.position.z         << std::endl;
     std::cout << "Transformed position:    " << transformed.object_pose.pose.position.x    << ", " << transformed.object_pose.pose.position.y    << ", " << transformed.object_pose.pose.position.z    << std::endl;
     std::cout << "Object orientation:      " << input->object_pose.pose.orientation.x      << ", " << input->object_pose.pose.orientation.y      << ", " << input->object_pose.pose.orientation.z      << ", " << input->object_pose.pose.orientation.w      << std::endl;
     std::cout << "Transformed orientation: " << transformed.object_pose.pose.orientation.x << ", " << transformed.object_pose.pose.orientation.y << ", " << transformed.object_pose.pose.orientation.z << ", " << transformed.object_pose.pose.orientation.w << std::endl;
     std::cout << std::endl;
-    
-    transform_listener->transformPose(map_frame, input->object_pose, transformed.object_pose);
-    transformed.object_pose.header.stamp = ros::Time(0);
-    // Visualize object pose
-    visualization_msgs::Marker object_marker;
-    
-    object_marker.ns              = "my_namespace";
-    object_marker.id              = 0;
-    
-    object_marker.header.frame_id = map_frame;
-    object_marker.header.stamp    = ros::Time();
-    object_marker.pose            = transformed.object_pose.pose;
-    
-    object_marker.action          = visualization_msgs::Marker::ADD;
-    object_marker.type            = visualization_msgs::Marker::CUBE;
-    
-    object_marker.scale.x         = 1.0;
-    object_marker.scale.y         = 1.0;
-    object_marker.scale.z         = 1.0;
-    
-    object_marker.color.a         = 1.0;
-    object_marker.color.r         = 0.0;
-    object_marker.color.g         = 1.0;
-    object_marker.color.b         = 0.0;
-    
-    object_pose_publisher.publish(object_marker);
   }
-  // Add transformed object to map
+  // Try adding transformed object to map
   thesis::DatabaseGetByID db_get_by_type_service;
   db_get_by_type_service.request.id = input->object_id;
   if(db_get_by_type_client.call(db_get_by_type_service))
   {
+    // Compute min distance
+    // the object needs to have to existing objects of the same type
+    // in order to be considered a new object
     float min_distance = (db_get_by_type_service.response.sample.width
                        +  db_get_by_type_service.response.sample.height) / 2;
+    // Add object to semantic map
     semantic_map.add(transformed, min_distance);
   }
   else
   {
+    // Still add object to map
     semantic_map.add(transformed);
-    ROS_WARN("Failed to call service 'thesis_database/set_by_type'.");
+    // Error
+    ROS_WARN("Failed to call service 'thesis_database/get_by_type'.");
     return;
   }
 }
@@ -154,8 +131,6 @@ int main(int argc, char** argv)
   db_get_by_type_client = nh.serviceClient<thesis::DatabaseGetByID>("thesis_database/get_by_type");
   // Subscribe to relevant topics
   ros::Subscriber object_subscriber = nh.subscribe("thesis_recognition/objects", 1, object_callback);
-  // Publish transformed object + camera poses for debug purposes
-  object_pose_publisher = nh_private.advertise<visualization_msgs::Marker>("vis_object_pose", 1);
   // Advertise services
   ros::ServiceServer srv_all         = nh_private.advertiseService("all", get_all);
   ros::ServiceServer srv_by_type     = nh_private.advertiseService("by_type", get_by_type);

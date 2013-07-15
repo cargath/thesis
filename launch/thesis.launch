@@ -28,4 +28,8 @@
   <!-- Semantic map -->
   <node pkg="thesis" type="init_mapping" name="init_mapping" output="screen">
   </node>
+  
+  <!-- Visualisation -->
+  <node pkg="thesis" type="init_example" name="init_example" output="screen">
+  </node>
 </launch>
