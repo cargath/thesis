@@ -59,6 +59,9 @@ void create_markers(thesis::ObjectStamped& object)
   object_marker.id      = unique_marker_id++;
   object_marker.type    = visualization_msgs::Marker::ARROW;
   object_marker.pose    = object.object_pose.pose;
+  object_marker.scale.x = 0.2;
+  object_marker.scale.y = 0.02;
+  object_marker.scale.z = 0.02;
   object_marker.color.r = 1.0;
   object_marker.color.g = 0.0;
   object_marker.color.b = 0.0;
@@ -118,6 +121,9 @@ void create_markers(thesis::ObjectStamped& object)
   object_marker.type    = visualization_msgs::Marker::TEXT_VIEW_FACING;
   object_marker.pose    = object.object_pose.pose;
   object_marker.scale.z = 0.1;
+  object_marker.color.r = 1.0;
+  object_marker.color.g = 1.0;
+  object_marker.color.b = 1.0;
   object_marker.text    = object.object_id;
   markers.markers.push_back(object_marker);
 }
@@ -138,7 +144,7 @@ int main(int argc, char** argv)
   ros::service::waitForService("thesis_mapping/all", -1);
   map_get_all_client = nh.serviceClient<thesis::MappingGetAll>("thesis_mapping/all");
   // Publish transformed object + camera poses for debug purposes
-  object_pose_publisher = nh_private.advertise<visualization_msgs::MarkerArray>("visualization_marker_array", 1);
+  object_pose_publisher = nh.advertise<visualization_msgs::MarkerArray>("visualization_marker_array", 1);
   // Clear, create new and publish markers
   ros::Duration wait_duration(1);
   while(ros::ok())
@@ -149,6 +155,24 @@ int main(int argc, char** argv)
     thesis::MappingGetAll map_get_all_service;
     if(map_get_all_client.call(map_get_all_service))
     {
+      //
+      thesis::ObjectStamped msg;
+      
+      tf::Quaternion identityQuaternion = tf::createIdentityQuaternion();
+      
+      msg.object_id = "Identity";
+      
+      msg.object_pose.header.stamp       = ros::Time::now();
+      msg.object_pose.header.frame_id    = map_frame;
+      msg.object_pose.pose.position.x    = 0;
+      msg.object_pose.pose.position.y    = 0;
+      msg.object_pose.pose.position.z    = 0;
+      tf::quaternionTFToMsg(identityQuaternion, msg.object_pose.pose.orientation);
+      
+      msg.camera_pose = msg.object_pose;
+      
+      map_get_all_service.response.objects.push_back(msg);
+      
       // Create various markers for every object
       for(size_t i = 0; i < map_get_all_service.response.objects.size(); i++)
       {

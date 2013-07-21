@@ -27,10 +27,10 @@
   </node>
   
   <!-- Semantic map -->
-  <node pkg="thesis" type="init_mapping" name="init_mapping" output="screen">
+  <node pkg="thesis" type="init_mapping" name="thesis_mapping" output="screen">
   </node>
   
   <!-- Visualisation -->
-  <node pkg="thesis" type="init_example" name="init_example" output="screen">
+  <node pkg="thesis" type="init_example" name="thesis_example" output="screen">
   </node>
 </launch>

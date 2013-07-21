@@ -556,7 +556,7 @@ void callback_openni(const Image::ConstPtr& rgb_input,
   camera_model.fromCameraInfo(cam_info_input);
   for(size_t i = 0; i < findings.size(); i++)
   {
-    //publish_object(findings[i], cv_ptr_mono8->image, depth_image);
+    publish_object(findings[i], cv_ptr_mono8->image, depth_image);
   }
 }
 
