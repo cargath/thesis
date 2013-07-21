@@ -23,6 +23,7 @@
   <node pkg="thesis" type="init_recognition" name="thesis_recognition" output="screen">
     <param name="mipmap_level" type="int" value="1"/>
     <param name="max_objects_per_frame" type="int" value="5"/>
+    <param name="max_nof_keypoints" type="int" value="64"/>
   </node>
   
   <!-- Semantic map -->

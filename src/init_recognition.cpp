@@ -48,7 +48,8 @@ std::string camera_frame,
             map_frame;
             
 int         mipmap_level,
-            max_objects_per_frame;
+            max_objects_per_frame,
+            max_nof_keypoints;
 
 // Camera orientation seen from the camera POV
 static const cv::Point3f YPR_CAMERA = xyz2ypr(cv::Point3f(0.0f, 0.0f, 1.0f));
@@ -127,6 +128,7 @@ bool reset(int mipmaps)
       }
       ROS_INFO("Loading sample '%s'.", db_get_all_service.response.samples[i].id.c_str());
       // Process sample image (compute keypoints and descriptors)
+      object_recognizer.setMaxKeypoints(max_nof_keypoints);
       ObjectRecognizer::ImageInfo image_info;
       object_recognizer.getImageInfo(cv_ptr->image, image_info);
       database_processed[db_get_all_service.response.samples[i].id].first = image_info;
@@ -134,6 +136,7 @@ bool reset(int mipmaps)
       cv::Mat sample_mipmap;
       create_mipmap(cv_ptr->image, sample_mipmap, mipmap_level);
       // Process mipmap image (compute keypoints and descriptors)
+      object_recognizer.setMaxKeypoints(max_nof_keypoints / (mipmap_level+1));
       ObjectRecognizer::ImageInfo mipmap_info;
       object_recognizer.getImageInfo(sample_mipmap, mipmap_info);
       database_processed[db_get_all_service.response.samples[i].id].second = mipmap_info;
@@ -337,17 +340,28 @@ inline void recognize(const std::string& sample_id,
   {
     if(object_recognizer.recognize(sample_image_info, camera_image_info, object_points))
     {
-      // Visualize result
-      draw_rectangle(object_points, GREEN, debug_image);
-      // We want to search for this candidate in the original camera image for higher precision
-      findings.push_back(IDClusterPair(sample_id, object_points));
       // Remove keypoints belonging to this candidate from image info,
       // in order to search for other candidates of the same type
       ObjectRecognizer::ImageInfo inside_mask;
       object_recognizer.filterImageInfo(camera_image_info, object_points, &inside_mask, &camera_image_info);
-      cv::drawKeypoints(debug_image, inside_mask.keypoints, debug_image, YELLOW);
-      // Start next search with an empty vector again
-      object_points.clear();
+      // 
+      if(inside_mask.keypoints.size() >= 4)
+      {
+        // Visualize result
+        draw_rectangle(object_points, GREEN, debug_image);
+        // We want to search for this candidate in the original camera image for higher precision
+        findings.push_back(IDClusterPair(sample_id, object_points));
+        cv::drawKeypoints(debug_image, inside_mask.keypoints, debug_image, YELLOW);
+        // Start next search with an empty vector again
+        object_points.clear();
+      }
+      else
+      {
+        // Draw result one last time in order to visualize false positives
+        draw_rectangle(object_points, RED, debug_image);
+        // We won't find any more occurrences
+        break;
+      }
     }
     else
     {
@@ -364,12 +378,12 @@ void callback_simple(const cv::Mat& camera_image,
                      std::vector<IDClusterPair>& findings)
 {
   // Process camera image
+  object_recognizer.setMaxKeypoints(max_nof_keypoints);
   ObjectRecognizer::ImageInfo cam_img_info;
   object_recognizer.getImageInfo(camera_image, cam_img_info);
   // Draw keypoints to debug image
   cv::drawKeypoints(camera_debug_image, cam_img_info.keypoints, camera_debug_image, YELLOW);
   // Recognize objects
-  std::vector<cv::KeyPoint> keypoints_cut;
   for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
   {
     recognize(it->first,
@@ -396,13 +410,13 @@ void callback_mipmapping(const cv::Mat& camera_image,
   cv::Mat mipmap_debug_image;
   create_mipmap(camera_debug_image, mipmap_debug_image, mipmap_level);
   // Process the mipmap of the camera image
+  object_recognizer.setMaxKeypoints(max_nof_keypoints / (mipmap_level+1));
   ObjectRecognizer::ImageInfo cam_img_mipmap_info;
   object_recognizer.getImageInfo(cam_img_mipmap, cam_img_mipmap_info);
   // Draw keypoints to debug image
   cv::drawKeypoints(mipmap_debug_image, cam_img_mipmap_info.keypoints, mipmap_debug_image, BLUE);
   // Recognize sample mipmaps on camera mipmap
   std::vector<IDClusterPair> mipmap_findings;
-  std::vector<cv::KeyPoint> keypoints_cut;
   for(ProcessedDatabase::iterator it = database_processed.begin(); it != database_processed.end(); it++)
   {
     recognize(it->first,
@@ -445,6 +459,7 @@ void callback_mipmapping(const cv::Mat& camera_image,
   // so we can fill it with objects recognized this frame again
   tracking_objects.clear();
   // Compute keypoints and descriptors for the original camera image
+  object_recognizer.setMaxKeypoints(max_nof_keypoints);
   ObjectRecognizer::ImageInfo camera_image_info;
   object_recognizer.getImageInfo(camera_image, camera_image_info);
   cv::drawKeypoints(camera_debug_image, camera_image_info.keypoints, camera_debug_image, BLUE);
@@ -541,7 +556,7 @@ void callback_openni(const Image::ConstPtr& rgb_input,
   camera_model.fromCameraInfo(cam_info_input);
   for(size_t i = 0; i < findings.size(); i++)
   {
-    publish_object(findings[i], cv_ptr_mono8->image, depth_image);
+    //publish_object(findings[i], cv_ptr_mono8->image, depth_image);
   }
 }
 
@@ -582,8 +597,10 @@ int main(int argc, char** argv)
   // Get local parameters
   nh_private.param("mipmap_level", mipmap_level, 0);
   nh_private.param("max_objects_per_frame", max_objects_per_frame, 1);
+  nh_private.param("max_nof_keypoints", max_nof_keypoints, 64);
   ROS_INFO("  Mipmap level: %i.", mipmap_level);
   ROS_INFO("  Max objects per frame: %i.", max_objects_per_frame);
+  ROS_INFO("  Max number of keypoints: %i.", max_nof_keypoints);
   
   // Initialize reusable service clients
   ros::service::waitForService("thesis_database/get_all", -1);

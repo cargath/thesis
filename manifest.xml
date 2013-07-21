@@ -15,6 +15,7 @@
   <depend package="tf"/>
   
   <depend package="cv_bridge"/>
-  <depend package="opencv2"/>
+  <rosdep name="opencv2"/>
+  
   <depend package="image_geometry"/>
 </package>

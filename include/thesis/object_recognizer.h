@@ -37,6 +37,10 @@ class ObjectRecognizer
 
     /**
      */
+    void setMaxKeypoints(const int maxKeypoints);
+
+    /**
+     */
     void filterImageInfo(const ImageInfo& input,
                          const std::vector<cv::Point2f>& mask,
                          ImageInfo* inside_mask,
@@ -56,7 +60,8 @@ class ObjectRecognizer
      */
     bool recognize(ImageInfo& sample_info,
                    ImageInfo& cam_img_info,
-                   std::vector<cv::Point2f>& object_points);
+                   std::vector<cv::Point2f>& object_points,
+                   cv::FlannBasedMatcher* matcher=NULL);
 
   protected:
     #ifndef USE_SIFT_GPU

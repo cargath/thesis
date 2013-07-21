@@ -141,10 +141,8 @@ int main(int argc, char** argv)
   object_pose_publisher = nh_private.advertise<visualization_msgs::MarkerArray>("visualization_marker_array", 1);
   // Clear, create new and publish markers
   ros::Duration wait_duration(1);
-  while(true)
+  while(ros::ok())
   {
-    // Don't publish markers in real-time ;)
-    wait_duration.sleep();
     // Remove previously published markers
     clear_markers();
     // Get objects from semantic map
@@ -165,9 +163,11 @@ int main(int argc, char** argv)
     }
     // Publish visualization markers
     object_pose_publisher.publish(markers);
+    // Spin
+    ros::spinOnce();
+    // Don't publish markers in real-time ;)
+    wait_duration.sleep();
   }
-  // Spin
-  ros::spin();
   // Exit
   return 0;
 }

@@ -78,7 +78,7 @@ class SiftGPUWrapper
 	            int num1,
 	            const std::vector<float>& descriptors2,
 	            int num2,
-	            std::vector<cv::DMatch>* matches);
+	            std::vector<cv::DMatch>& matches);
 
 	  /**
 	   * @return Instance of the singleton class.

@@ -38,12 +38,8 @@ SiftGPUWrapper::SiftGPUWrapper()
   imageHeight = 0;
   imageWidth = 0;
   siftgpu = new SiftGPU();
-
-  #if defined(SIFT_GPU_MODE) and SIFT_GPU_MODE == 1
-    char method[] = {"-cuda"};
-  #elif defined(SIFT_GPU_MODE) and SIFT_GPU_MODE == 2
-    char method[] = {"-glsl"};
-  #endif
+  
+  char method[] = {"-glsl"};
 
   int max_features = 600;
   char max_feat_char[10];
@@ -136,6 +132,7 @@ void SiftGPUWrapper::detect(const cv::Mat& image,
     keypoints.clear();
     ROS_FATAL("SiftGPUWrapper: ");
     ROS_FATAL("  SiftGPU cannot be used. Detection of keypoints failed.");
+    return;
   }
 
   // Get image
@@ -151,10 +148,8 @@ void SiftGPUWrapper::detect(const cv::Mat& image,
   int num_features = 0;
   SiftGPU::SiftKeypoint* keys = 0;
 
-  ROS_INFO("SiftGPUWrapper: cols: %d, rows: %d", image.cols, image.rows);
   if(siftgpu->RunSIFT(image.cols, image.rows, data, GL_LUMINANCE, GL_UNSIGNED_BYTE))
   {
-    ROS_INFO("SiftGPUWrapper: SiftGPU->RunSIFT() succeeded!");
     num_features = siftgpu->GetFeatureNum();
     ROS_INFO("SiftGPUWrapper: Number of features found: %i", num_features);
     keys = new SiftGPU::SiftKeypoint[num_features];
@@ -182,7 +177,7 @@ int SiftGPUWrapper::match(const std::vector<float>& descriptors1,
                           int num1,
                           const std::vector<float>& descriptors2,
                           int num2,
-                          std::vector<cv::DMatch>* matches)
+                          std::vector<cv::DMatch>& matches)
 {
   ROS_INFO("SiftGPUWrapper: match()");
 
@@ -198,12 +193,6 @@ int SiftGPUWrapper::match(const std::vector<float>& descriptors1,
 
   int (*match_buf)[2] = new int[num1][2];
   int number = matcher->GetSiftMatch(num1, match_buf, 0.9, 0.9);
-
-  if(matches->size() != 0)
-  {
-    ROS_WARN("SiftGPUWrapper: Clearing matches vector.");
-    matches->clear();
-  }
 
   cv::DMatch match;
   int counter = 0;
@@ -237,14 +226,18 @@ int SiftGPUWrapper::match(const std::vector<float>& descriptors1,
 
     match.distance = sqrt(sum);
     sumDistances += match.distance;
-    matches->push_back(match);
+    
     ROS_DEBUG("SiftGPUWrapper: ");
     ROS_DEBUG("  Matched Features %d and %d with distance of %f. Sum: %f",
               match.queryIdx,
               match.trainIdx,
               match.distance,
               sumDistances);
+              
+    matches.push_back(match);
   }
+
+  ROS_INFO("SiftGPUWrapper: Number of matches found: %i", number);
 
   delete[] match_buf;
 
@@ -263,8 +256,7 @@ void SiftGPUWrapper::initializeMatcher()
     error = true;
     return;
   }
-  ROS_INFO("SiftGPUWrapper: ");
-  ROS_INFO("  SiftGPU matcher initialized successfully.");
+  ROS_INFO("SiftGPUWrapper: SiftGPU matcher initialized successfully.");
   isMatcherInitialized = true;
 }
 

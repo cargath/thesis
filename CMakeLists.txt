@@ -3,8 +3,6 @@ include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
 
 # Configuration
 set(USE_SIFT_GPU 0)
-set(ENV{SIFT_GPU_MODE} 2) #CUDA = 1, GLSL = 2
-set(ENV{SIFT_GPU_CUDA_PATH}	/usr/local/cuda)
 
 # Set the build type. Options are:
 #  Coverage       : w/ debug symbols, w/o optimization, w/ code-coverage
@@ -54,7 +52,6 @@ IF (${USE_SIFT_GPU})
 	)
 	# Tell other sources to use SiftGPU
 	add_definitions(-DUSE_SIFT_GPU)
-	add_definitions(-DSIFT_GPU_MODE=$ENV{SIFT_GPU_MODE})
 ENDIF (${USE_SIFT_GPU})
 
 # Object recognizer library
@@ -78,7 +75,7 @@ target_link_libraries(init_recognition shared recognizer)
 # Node semantic mapping
 rosbuild_add_executable(init_mapping src/init_mapping.cpp src/semantic_map.cpp)
 
-# Node example
+# Node visualization
 rosbuild_add_executable(init_example src/init_example.cpp)
 
 # Link with boost

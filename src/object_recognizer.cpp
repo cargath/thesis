@@ -26,6 +26,11 @@ ObjectRecognizer::~ObjectRecognizer()
   // Default destructor
 }
 
+void ObjectRecognizer::setMaxKeypoints(const int maxKeypoints)
+{
+  feature_detector = cv::SiftFeatureDetector(maxKeypoints);
+}
+
 void ObjectRecognizer::filterImageInfo(const ImageInfo& input,
                                        const std::vector<cv::Point2f>& mask,
                                        ImageInfo* inside_mask,
@@ -92,6 +97,7 @@ void ObjectRecognizer::getImageInfo(const cv::Mat& image,
   #endif
   #ifndef USE_SIFT_GPU
     feature_detector.detect(image, image_info.keypoints);
+    std::cout << "Number of features: " << image_info.keypoints.size() << std::endl;
     if(!image_info.keypoints.empty())
     {
       descriptor_extractor.compute(image, image_info.keypoints, image_info.descriptors);
@@ -147,7 +153,8 @@ void ObjectRecognizer::getPartialImageInfo(const cv::Mat& image,
 
 bool ObjectRecognizer::recognize(ImageInfo& sample_info,
                                  ImageInfo& cam_img_info,
-                                 std::vector<cv::Point2f>& object_points)
+                                 std::vector<cv::Point2f>& object_points,
+                                 cv::FlannBasedMatcher* matcher)
 {
   // Otherwise an OpenCV assertion would fail for images without keypoints
   #ifdef  USE_SIFT_GPU
@@ -171,18 +178,25 @@ bool ObjectRecognizer::recognize(ImageInfo& sample_info,
                                          sample_info.descriptors.size(),
                                          cam_img_info.descriptors,
                                          cam_img_info.descriptors.size(),
-                                         &matches_filtered);
+                                         matches_filtered);
   #endif
   #ifndef USE_SIFT_GPU
     // Match descriptors (find the k=2 nearest neighbours)
     std::vector<std::vector<cv::DMatch> > matches;
-    flann_matcher.knnMatch(sample_info.descriptors, cam_img_info.descriptors, matches, 2);
+    if(matcher)
+    {
+      matcher->knnMatch(sample_info.descriptors, matches, 2);
+    }
+    else
+    {
+      flann_matcher.knnMatch(sample_info.descriptors, cam_img_info.descriptors, matches, 2);
+    }
     // Filter matches:
     // By ratio of nearest and second nearest neighbour distance
     for(size_t i = 0; i < matches.size(); i++)
     {
       float ratio = matches[i][0].distance / matches[i][1].distance;
-      if(ratio < 0.8f)
+      if(ratio < 0.9f)
       {
         matches_filtered.push_back(matches[i][0]);
       }

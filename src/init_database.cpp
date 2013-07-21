@@ -285,9 +285,11 @@ int main(int argc, char** argv)
   ROS_INFO("  Camera info topic: %s.", camera_info_topic.c_str());
   ros::Subscriber camera_info_subscriber = nh.subscribe(camera_info_topic, 1, callback_openni_once);
   ros::Time wait_time = ros::Time::now();
-  while(!openni_once)
+  while(!openni_once && ros::ok())
   {
+    // Spin
     ros::spinOnce();
+    // Stop if wait time is up
     if(ros::Time::now().toSec() - wait_time.toSec() > MAX_OPENNI_TOPIC_WAIT_TIME)
     {
       break;
