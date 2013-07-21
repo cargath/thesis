@@ -74,7 +74,7 @@ void create_markers(thesis::ObjectStamped& object)
   double y, p, r;
   matTemp.getRPY(r, p, y);
   double y_ = y + M_PI / 2,
-         p_ = p + M_PI / 2;
+         p_ = p - M_PI / 2;
   
   // Arrow; y-axis
   object_marker.id               = unique_marker_id++;
@@ -155,24 +155,19 @@ int main(int argc, char** argv)
     thesis::MappingGetAll map_get_all_service;
     if(map_get_all_client.call(map_get_all_service))
     {
-      //
+      // Add identity pose
+      // (for verifying axis-arrow markers)
       thesis::ObjectStamped msg;
-      
       tf::Quaternion identityQuaternion = tf::createIdentityQuaternion();
-      
       msg.object_id = "Identity";
-      
       msg.object_pose.header.stamp       = ros::Time::now();
       msg.object_pose.header.frame_id    = map_frame;
       msg.object_pose.pose.position.x    = 0;
       msg.object_pose.pose.position.y    = 0;
       msg.object_pose.pose.position.z    = 0;
       tf::quaternionTFToMsg(identityQuaternion, msg.object_pose.pose.orientation);
-      
       msg.camera_pose = msg.object_pose;
-      
       map_get_all_service.response.objects.push_back(msg);
-      
       // Create various markers for every object
       for(size_t i = 0; i < map_get_all_service.response.objects.size(); i++)
       {
