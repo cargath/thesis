@@ -173,11 +173,9 @@ void SiftGPUWrapper::detect(const cv::Mat& image,
   }
 }
 
-int SiftGPUWrapper::match(const std::vector<float>& descriptors1,
-                          int num1,
-                          const std::vector<float>& descriptors2,
-                          int num2,
-                          std::vector<cv::DMatch>& matches)
+bool SiftGPUWrapper::match(const std::vector<float>& descriptors1,
+                           const std::vector<float>& descriptors2,
+                           std::vector<cv::DMatch>& matches)
 {
   ROS_INFO("SiftGPUWrapper: match()");
 
@@ -188,6 +186,9 @@ int SiftGPUWrapper::match(const std::vector<float>& descriptors1,
 
   float sumDistances = 0;
 
+  int num1 = descriptors1.size() / 128,
+      num2 = descriptors2.size() / 128;
+
   matcher->SetDescriptors(0, num1, &descriptors1[0]);
   matcher->SetDescriptors(1, num2, &descriptors2[0]);
 
@@ -197,6 +198,8 @@ int SiftGPUWrapper::match(const std::vector<float>& descriptors1,
   cv::DMatch match;
   int counter = 0;
 
+  matches.clear();
+  
   for(int i = 0; i < number; i++)
   {
     match.queryIdx = match_buf[i][0];
@@ -211,10 +214,10 @@ int SiftGPUWrapper::match(const std::vector<float>& descriptors1,
 
     if(counter > 0.5 * number)
     {
-      matches->clear();
+      matches.clear();
       sumDistances = 0;
       ROS_ERROR("SiftGPUWrapper: Matches bad due to context error.");
-      break;
+      return false;
     }
 
     float sum = 0;
@@ -237,11 +240,11 @@ int SiftGPUWrapper::match(const std::vector<float>& descriptors1,
     matches.push_back(match);
   }
 
-  ROS_INFO("SiftGPUWrapper: Number of matches found: %i", number);
+  ROS_INFO("SiftGPUWrapper: Number of matches found: %lo", matches.size());
 
   delete[] match_buf;
 
-  return sumDistances;
+  return true;
 }
 
 void SiftGPUWrapper::initializeMatcher()

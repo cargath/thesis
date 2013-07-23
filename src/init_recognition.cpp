@@ -50,6 +50,8 @@ std::string camera_frame,
 int         mipmap_level,
             max_objects_per_frame,
             max_nof_keypoints;
+            
+double      knn_1to2_ratio;
 
 // Camera orientation seen from the camera POV
 static const cv::Point3f YPR_CAMERA = xyz2ypr(cv::Point3f(0.0f, 0.0f, 1.0f));
@@ -587,7 +589,7 @@ int main(int argc, char** argv)
   nh.getParam("/thesis/camera_frame",      camera_frame);
   nh.getParam("/thesis/map_frame",         map_frame);
   
-  ROS_INFO("Perception: ");
+  ROS_INFO("Perception (global parameters): ");
   ROS_INFO("  RGB image topic:   %s.", rgb_image_topic.c_str());
   ROS_INFO("  Depth image topic: %s.", depth_image_topic.c_str());
   ROS_INFO("  Camera info topic: %s.", camera_info_topic.c_str());
@@ -598,9 +600,13 @@ int main(int argc, char** argv)
   nh_private.param("mipmap_level", mipmap_level, 0);
   nh_private.param("max_objects_per_frame", max_objects_per_frame, 1);
   nh_private.param("max_nof_keypoints", max_nof_keypoints, 64);
-  ROS_INFO("  Mipmap level: %i.", mipmap_level);
-  ROS_INFO("  Max objects per frame: %i.", max_objects_per_frame);
+  nh_private.param("knn_1to2_ratio", knn_1to2_ratio, 0.9);
+  
+  ROS_INFO("Perception (local parameters): ");
+  ROS_INFO("  Mipmap level:            %i.", mipmap_level);
+  ROS_INFO("  Max objects per frame:   %i.", max_objects_per_frame);
   ROS_INFO("  Max number of keypoints: %i.", max_nof_keypoints);
+  ROS_INFO("  KNN 1st to 2nd ratio:    %f.", knn_1to2_ratio);
   
   // Initialize reusable service clients
   ros::service::waitForService("thesis_database/get_all", -1);

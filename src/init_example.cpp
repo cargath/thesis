@@ -30,6 +30,15 @@ ros::Publisher object_pose_publisher;
 visualization_msgs::MarkerArray markers;
 unsigned int unique_marker_id;
 
+inline void normalize_quaternion(geometry_msgs::Quaternion& q)
+{
+  double m = sqrt(q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w);
+  q.x = q.x / m;
+  q.y = q.y / m;
+  q.z = q.z / m;
+  q.w = q.w / m;
+}
+
 void clear_markers()
 {
   // Remove markers
@@ -69,9 +78,23 @@ void create_markers(thesis::ObjectStamped& object)
   
   // Rotate object pose to represent the other axis
   tf::Quaternion q;
+  std::cout << object.object_id << std::endl;
+  std::cout << "Before: ";
+  std::cout << "x: " << object.object_pose.pose.orientation.x << ", ";
+  std::cout << "y: " << object.object_pose.pose.orientation.y << ", ";
+  std::cout << "z: " << object.object_pose.pose.orientation.z << ", ";
+  std::cout << "w: " << object.object_pose.pose.orientation.w << std::endl;
+  normalize_quaternion(object.object_pose.pose.orientation);
+  std::cout << "After: ";
+  std::cout << "x: " << object.object_pose.pose.orientation.x << ", ";
+  std::cout << "y: " << object.object_pose.pose.orientation.y << ", ";
+  std::cout << "z: " << object.object_pose.pose.orientation.z << ", ";
+  std::cout << "w: " << object.object_pose.pose.orientation.w << std::endl << std::endl;
   tf::quaternionMsgToTF(object.object_pose.pose.orientation, q);
   tf::Matrix3x3 matTemp(q);
-  double y, p, r;
+  double y,
+         p,
+         r;
   matTemp.getRPY(r, p, y);
   double y_ = y + M_PI / 2,
          p_ = p - M_PI / 2;
@@ -171,6 +194,7 @@ int main(int argc, char** argv)
       // Create various markers for every object
       for(size_t i = 0; i < map_get_all_service.response.objects.size(); i++)
       {
+        std::cout << "Create markers for #" << i << std::endl;
         create_markers(map_get_all_service.response.objects[i]);
       }
     }

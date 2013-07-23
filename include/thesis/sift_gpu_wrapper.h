@@ -64,21 +64,18 @@ class SiftGPUWrapper
 	              std::vector<float>& descriptors);
 
 	  /**
-	   * Is used for matching two descriptors.
+	   * Is used for matching two sets of descriptors.
 	   *
 	   * @param descriptors1 The first descriptor.
-	   * @param num1         Size of the first descriptor.
 	   * @param descriptors2 The second descriptor.
-	   * @param num2         Size of the second descriptor.
 	   * @param matches      Is used to store the matches.
 	   *
-	   * @return The summed distance of the corresponding descriptors.
+	   * @return false if there was an error during the matching process,
+	   *         true  otherwise.
 	   */
-	  int match(const std::vector<float>& descriptors1,
-	            int num1,
-	            const std::vector<float>& descriptors2,
-	            int num2,
-	            std::vector<cv::DMatch>& matches);
+	  bool match(const std::vector<float>& descriptors1,
+	             const std::vector<float>& descriptors2,
+	             std::vector<cv::DMatch>& matches);
 
 	  /**
 	   * @return Instance of the singleton class.

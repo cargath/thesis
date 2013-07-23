@@ -39,8 +39,10 @@ SemanticMap semantic_map;
 
 void object_callback(const thesis::ObjectStamped::ConstPtr& input)
 {
-  ROS_INFO("Mapping: Object callback.");
+  // 
   thesis::ObjectStamped transformed;
+  transformed.object_id = input->object_id;
+  //
   transform_listener->waitForTransform(camera_frame, map_frame, input->camera_pose.header.stamp, ros::Duration(tf_timeout));
   // Transform recognized camera pose to map frame
   transform_listener->transformPose(map_frame, input->camera_pose, transformed.camera_pose);

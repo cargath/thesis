@@ -1,12 +1,12 @@
 <launch>
   <!-- Global parameters -->
   <rosparam>
-    thesis/rgb_image_topic: 'camera/rgb/image_rect_color'
+    thesis/rgb_image_topic:   'camera/rgb/image_rect_color'
     thesis/depth_image_topic: 'camera/depth_registered/image_rect'
     thesis/camera_info_topic: 'camera/depth_registered/camera_info'
-    thesis/camera_frame: '/head_mount_kinect_rgb_optical_frame' <!-- /head_mount_kinect_rgb_optical_frame -->
-    thesis/map_frame: '/map'
-    thesis/tf_timeout: 0.5
+    thesis/camera_frame:      '/head_mount_kinect_rgb_optical_frame' <!-- /head_mount_kinect_rgb_optical_frame -->
+    thesis/map_frame:         '/map'
+    thesis/tf_timeout:        0.5
   </rosparam>
 
   <!-- Camera coordinates, 30fps -->
@@ -21,9 +21,10 @@
   
   <!-- Perception -->
   <node pkg="thesis" type="init_recognition" name="thesis_recognition" output="screen">
-    <param name="mipmap_level" type="int" value="1"/>
-    <param name="max_objects_per_frame" type="int" value="5"/>
-    <param name="max_nof_keypoints" type="int" value="64"/>
+    <param name="mipmap_level"          type="int"    value="1"/>
+    <param name="max_objects_per_frame" type="int"    value="5"/>
+    <param name="max_nof_keypoints"     type="int"    value="64"/>
+    <param name="knn_1to2_ratio"        type="double" value="0.9"/>
   </node>
   
   <!-- Semantic map -->

@@ -9,10 +9,38 @@
 
 #include <tf/transform_datatypes.h>
 
-inline float evaluate(const thesis::ObjectStamped& o)
+inline bool pos_isnan(geometry_msgs::PoseStamped pose)
+{
+  return (isnan(pose.pose.position.x)
+       || isnan(pose.pose.position.y)
+       || isnan(pose.pose.position.z));
+}
+
+inline bool rot_isnan(geometry_msgs::PoseStamped pose)
+{
+  return (isnan(pose.pose.orientation.x)
+       || isnan(pose.pose.orientation.y)
+       || isnan(pose.pose.orientation.z)
+       || isnan(pose.pose.orientation.w));
+}
+
+inline double evaluate(const thesis::ObjectStamped& o)
 {
   // TODO
-  return 0.0f;
+  
+  // x
+  double x = 0.5;
+  
+  // y
+  double y = 0.5 - atan(x*2.5 -5) / M_PI;
+  
+  //
+//  std::cout << "Semantic map: Evaluate: "      << std::endl;
+//  std::cout << "  x: "                    << x << std::endl;
+//  std::cout << "  y: "                    << y << std::endl;
+  
+  //
+  return y;
 }
 
 struct EvaluationComparator
@@ -21,7 +49,7 @@ struct EvaluationComparator
   {
     return evaluate(a) < evaluate(b);
   }
-};
+} evaluationComparator;
 
 SemanticMap::SemanticMap()
 {
@@ -54,25 +82,35 @@ bool SemanticMap::update(thesis::ObjectStamped& object, unsigned int at)
     if(existing_objects->size() > at)
     {
       thesis::ObjectStamped temp = existing_objects->at(at);
+      #define current_object existing_objects->at(at)
       if(temp.accuracy < INT_MAX - 2)
       {
-        existing_objects->at(at).accuracy++;
+        current_object.accuracy++;
       }
       // Update object position
-      #define current_object existing_objects->at(at)
       #define object_position object_pose.pose.position
-      current_object.object_position.x = average(temp.object_position.x, object.object_position.x, temp.accuracy, 1);
-      current_object.object_position.y = average(temp.object_position.y, object.object_position.y, temp.accuracy, 1);
-      current_object.object_position.z = average(temp.object_position.z, object.object_position.z, temp.accuracy, 1);
+      if(!pos_isnan(object.object_pose))
+      {
+        current_object.object_position.x = average(temp.object_position.x, object.object_position.x, temp.accuracy, 1);
+        current_object.object_position.y = average(temp.object_position.y, object.object_position.y, temp.accuracy, 1);
+        current_object.object_position.z = average(temp.object_position.z, object.object_position.z, temp.accuracy, 1);
+      }
       // Update object orientation
       #define object_orientation object_pose.pose.orientation
-      tf::Quaternion quaternion_old,
-                     quaternion_new;
-      tf::quaternionMsgToTF(temp.object_orientation,   quaternion_old);
-      tf::quaternionMsgToTF(object.object_orientation, quaternion_new);
-      double accuracy_normalized = 1.0 / INT_MAX * temp.accuracy;
-      tf::Quaternion quaternion_interpolated = quaternion_old.slerp(quaternion_new, 1.0 - accuracy_normalized);
-      tf::quaternionTFToMsg(quaternion_interpolated, current_object.object_orientation);
+      if(rot_isnan(temp.object_pose))
+      {
+        current_object.object_orientation = object.object_orientation;
+      }
+      else if(!rot_isnan(object.object_pose))
+      {
+        tf::Quaternion quaternion_old,
+                       quaternion_new;
+        tf::quaternionMsgToTF(temp.object_orientation,   quaternion_old);
+        tf::quaternionMsgToTF(object.object_orientation, quaternion_new);
+        double accuracy_normalized = 1.0 / INT_MAX * temp.accuracy;
+        tf::Quaternion quaternion_interpolated = quaternion_old.slerp(quaternion_new, 1.0 - accuracy_normalized);
+        tf::quaternionTFToMsg(quaternion_interpolated, current_object.object_orientation);
+      }
       // Success
       return true;
     }
@@ -95,7 +133,7 @@ bool SemanticMap::add(thesis::ObjectStamped& object, float min_distance)
   p_.z = object.object_pose.pose.position.z;
   // Check already stored objects of the same type
   std::vector<thesis::ObjectStamped>* existing_objects = &(map[object.object_id]);
-  unsigned int at;
+  unsigned int at = 0;
   bool exists = false;
   for(size_t i = 0; i < existing_objects->size(); i++)
   {
@@ -109,7 +147,12 @@ bool SemanticMap::add(thesis::ObjectStamped& object, float min_distance)
     {
       if(exists)
       {
-        return false;
+        ROS_WARN("Semantic map: ");
+        ROS_WARN("  Multiple existing objects of type %s at position (%f, %f, %f)",
+                 object.object_id.c_str(),
+                 object.object_pose.pose.position.x,
+                 object.object_pose.pose.position.y,
+                 object.object_pose.pose.position.z);
       }
       exists = true;
       at = i;
@@ -119,12 +162,24 @@ bool SemanticMap::add(thesis::ObjectStamped& object, float min_distance)
   // update the entry
   if(exists)
   {
+    ROS_INFO("Semantic map: ");
+    ROS_INFO("  Updating %s at (%f, %f, %f)",
+             object.object_id.c_str(),
+             object.object_pose.pose.position.x,
+             object.object_pose.pose.position.y,
+             object.object_pose.pose.position.z);
     return update(object, at);
   }
   // If there isn't already an object of this type,
   // create a new entry
   else
   {
+    ROS_INFO("Semantic map: ");
+    ROS_INFO("  Adding %s at (%f, %f, %f)",
+             object.object_id.c_str(),
+             object.object_pose.pose.position.x,
+             object.object_pose.pose.position.y,
+             object.object_pose.pose.position.z);
     existing_objects->push_back(object);
     return true;
   }
@@ -132,19 +187,26 @@ bool SemanticMap::add(thesis::ObjectStamped& object, float min_distance)
 
 void SemanticMap::getAll(std::vector<thesis::ObjectStamped>& out)
 {
+  //
   for(ObjectMap::iterator it = map.begin(); it != map.end(); it++)
   {
     out.insert(out.end(), it->second.begin(), it->second.end());
   }
+  //
+  std::sort(out.begin(), out.end(), evaluationComparator);
 }
 
 void SemanticMap::getByID(std::string id, std::vector<thesis::ObjectStamped>& out)
 {
+  //
   out = map[id];
+  //
+  std::sort(out.begin(), out.end(), evaluationComparator);
 }
 
 void SemanticMap::getByIDAtPosition(std::string id, cv::Point3f p, std::vector<thesis::ObjectStamped>& out, float max_distance)
 {
+  //
   std::vector<thesis::ObjectStamped> objects;
   getByID(id, objects);
   for(size_t i = 0; i < objects.size(); i++)
@@ -158,10 +220,13 @@ void SemanticMap::getByIDAtPosition(std::string id, cv::Point3f p, std::vector<t
       out.push_back(objects[i]);
     }
   }
+  //
+  std::sort(out.begin(), out.end(), evaluationComparator);
 }
 
 void SemanticMap::getByPosition(cv::Point3f p, std::vector<thesis::ObjectStamped>& out, float max_distance)
 {
+  //
   for(ObjectMap::iterator it = map.begin(); it != map.end(); it++)
   {
     for(size_t i = 0; i < it->second.size(); i++)
@@ -176,4 +241,6 @@ void SemanticMap::getByPosition(cv::Point3f p, std::vector<thesis::ObjectStamped
       }
     }
   }
+  //
+  std::sort(out.begin(), out.end(), evaluationComparator);
 }

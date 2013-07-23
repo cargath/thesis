@@ -28,7 +28,9 @@ ObjectRecognizer::~ObjectRecognizer()
 
 void ObjectRecognizer::setMaxKeypoints(const int maxKeypoints)
 {
-  feature_detector = cv::SiftFeatureDetector(maxKeypoints);
+  #ifndef USE_SIFT_GPU
+    feature_detector = cv::SiftFeatureDetector(maxKeypoints);
+  #endif
 }
 
 void ObjectRecognizer::filterImageInfo(const ImageInfo& input,
@@ -47,7 +49,9 @@ void ObjectRecognizer::filterImageInfo(const ImageInfo& input,
       {
         temp_inside_mask.keypoints.push_back(input.keypoints[i]);
         #ifdef  USE_SIFT_GPU
-          temp_inside_mask.descriptors.push_back(input.descriptors[i]);
+          temp_inside_mask.descriptors.insert(temp_inside_mask.descriptors.end(),
+                                              input.descriptors.begin()+i,
+                                              input.descriptors.begin()+i+128);
         #endif
         #ifndef USE_SIFT_GPU
           temp_inside_mask.descriptors.push_back(input.descriptors.row(i));
@@ -60,7 +64,9 @@ void ObjectRecognizer::filterImageInfo(const ImageInfo& input,
       {
         temp_outside_mask.keypoints.push_back(input.keypoints[i]);
         #ifdef  USE_SIFT_GPU
-          temp_outside_mask.descriptors.push_back(input.descriptors[i]);
+          temp_outside_mask.descriptors.insert(temp_outside_mask.descriptors.end(),
+                                               input.descriptors.begin()+i,
+                                               input.descriptors.begin()+i+128);
         #endif
         #ifndef USE_SIFT_GPU
           temp_outside_mask.descriptors.push_back(input.descriptors.row(i));
@@ -97,7 +103,6 @@ void ObjectRecognizer::getImageInfo(const cv::Mat& image,
   #endif
   #ifndef USE_SIFT_GPU
     feature_detector.detect(image, image_info.keypoints);
-    std::cout << "Number of features: " << image_info.keypoints.size() << std::endl;
     if(!image_info.keypoints.empty())
     {
       descriptor_extractor.compute(image, image_info.keypoints, image_info.descriptors);
@@ -125,7 +130,7 @@ void ObjectRecognizer::getPartialImageInfo(const cv::Mat& image,
       if(insideConvexPolygon(mask, temp_keypoints[i].pt))
       {
         temp_image_info.keypoints.push_back(temp_keypoints[i]);
-        temp_image_info.descriptors.push_back(temp_descriptors[i]);
+        temp_image_info.descriptors.push_back(temp_descriptors[i]); // TODO
       }
     }
   #endif
@@ -175,9 +180,7 @@ bool ObjectRecognizer::recognize(ImageInfo& sample_info,
     // - by ratio of nearest and second nearest neighbour distance
     // - by checking if two descriptors are a mutual best match
     SiftGPUWrapper::getInstance()->match(sample_info.descriptors,
-                                         sample_info.descriptors.size(),
                                          cam_img_info.descriptors,
-                                         cam_img_info.descriptors.size(),
                                          matches_filtered);
   #endif
   #ifndef USE_SIFT_GPU
