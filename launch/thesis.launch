@@ -16,11 +16,13 @@
 
   <!-- Database -->
   <node pkg="thesis" type="init_database" name="thesis_database" output="screen">
-    <param name="image_path" type="str" value="$(find thesis)/img/"/>
+    <param name="debug"      type="bool" value="true"/>
+    <param name="image_path" type="str"  value="$(find thesis)/img/"/>
   </node>
   
   <!-- Perception -->
   <node pkg="thesis" type="init_recognition" name="thesis_recognition" output="screen">
+    <param name="debug"                 type="bool"   value="true"/>
     <param name="mipmap_level"          type="int"    value="1"/>
     <param name="max_objects_per_frame" type="int"    value="5"/>
     <param name="max_nof_keypoints"     type="int"    value="64"/>
@@ -29,9 +31,11 @@
   
   <!-- Semantic map -->
   <node pkg="thesis" type="init_mapping" name="thesis_mapping" output="screen">
+    <param name="debug" type="bool" value="true"/>
   </node>
   
   <!-- Visualisation -->
   <node pkg="thesis" type="init_example" name="thesis_example" output="screen">
+    <param name="debug" type="bool" value="true"/>
   </node>
 </launch>

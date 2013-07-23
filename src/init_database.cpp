@@ -31,6 +31,13 @@
 // Constants
 static const double MAX_OPENNI_TOPIC_WAIT_TIME = 5.0;
 
+// Config parameters
+std::string camera_info_topic,
+            image_path;
+
+bool        debug;
+
+// 
 ImageLoader image_loader;
 
 // We try to get the image size of a connected OpenNI camera (if available)
@@ -274,15 +281,30 @@ int main(int argc, char** argv)
   ros::init(argc, argv, "thesis_database");
   ros::NodeHandle nh;
   ros::NodeHandle nh_private("~");
-  // Get path to image directory
-  std::string image_path;
-  nh_private.param("image_path", image_path, std::string("img"));
-  ROS_INFO("Database: ");
-  ROS_INFO("  Sample image path: %s.", image_path.c_str());
-  // Try to get OpenNI camera image size
-  std::string camera_info_topic;
+  
+  // Get global parameters
   nh.getParam("/thesis/camera_info_topic", camera_info_topic);
+  
+  ROS_INFO("Database (global parameters): ");
   ROS_INFO("  Camera info topic: %s.", camera_info_topic.c_str());
+  std::cout << std::endl;
+  
+  // Get local parameters
+  nh_private.param("debug",            debug,                 false);
+  nh_private.param("image_path",       image_path,            std::string("img"));
+  nh_private.param("min_image_width",  min_image_size.width,  1);
+  nh_private.param("min_image_height", min_image_size.height, 1);
+  nh_private.param("max_image_width",  max_image_size.width,  1280);
+  nh_private.param("max_image_height", max_image_size.height, 1024);
+  
+  ROS_INFO("Database (local parameters): ");
+  ROS_INFO("  Debug mode:        %s.", debug ? "true" : "false");
+  ROS_INFO("  Sample image path: %s.", image_path.c_str());
+  ROS_INFO("  Min image width:   %i.", min_image_size.width);
+  ROS_INFO("  Min image height:  %i.", min_image_size.height);
+  std::cout << std::endl;
+  
+  // Try to get OpenNI camera image size
   ros::Subscriber camera_info_subscriber = nh.subscribe(camera_info_topic, 1, callback_openni_once);
   ros::Time wait_time = ros::Time::now();
   while(!openni_once && ros::ok())
@@ -296,28 +318,30 @@ int main(int argc, char** argv)
     }
   }
   camera_info_subscriber.shutdown();
+  
   // Set image size limits
-  nh_private.param("min_image_width",  min_image_size.width,  1);
-  nh_private.param("min_image_height", min_image_size.height, 1);
   if(openni_once)
   {
     ROS_ASSERT_MSG(openni_image_size.width > 0 && openni_image_size.height > 0,
                    "Got bad image size from OpenNI camera.");
     max_image_size.width  = openni_image_size.width;
     max_image_size.height = openni_image_size.height;
-    ROS_INFO("Initializing image resolution limits:");
+    ROS_INFO("Database: ");
+    ROS_INFO("  Initializing image resolution limits:");
     ROS_INFO("  Got the following image resolution from OpenNI camera: %ix%i",
              openni_image_size.width, openni_image_size.height);
+    std::cout << std::endl;
   }
   else
   {
-    nh_private.param("max_image_width",  max_image_size.width,  1280);
-    nh_private.param("max_image_height", max_image_size.height, 1024);
-    ROS_INFO("Initializing image resolution limits:");
-    ROS_INFO("  Unable to get image resolution from OpenNI camera.");
-    ROS_INFO("  Using default or given max resolution (%ix%i) instead.",
+    ROS_WARN("Database: ");
+    ROS_WARN("  Initializing image resolution limits:");
+    ROS_WARN("  Unable to get image resolution from OpenNI camera.");
+    ROS_WARN("  Using default or given max resolution (%ix%i) instead.",
              max_image_size.width, max_image_size.height);
+    std::cout << std::endl;
   }
+  
   // Create sample database
   std::vector<cv::Mat> images;
   std::vector<std::string> filenames;
@@ -326,6 +350,7 @@ int main(int argc, char** argv)
   {
     add_image(images[i], filenames[i]);
   }
+  
   // Advertise services
   ros::ServiceServer srv_add_urls    = nh_private.advertiseService("add_urls",    callback_add_urls);
   ros::ServiceServer srv_add_files   = nh_private.advertiseService("add_files",   callback_add_files);
@@ -334,8 +359,10 @@ int main(int argc, char** argv)
   ros::ServiceServer srv_get_all     = nh_private.advertiseService("get_all",     callback_get_all);
   ros::ServiceServer srv_get_by_type = nh_private.advertiseService("get_by_type", callback_get_by_type);
   ros::ServiceServer srv_set_by_type = nh_private.advertiseService("set_by_type", callback_set_by_type);
+  
   // We are going to inform subscribing nodes about changes
   update_publisher = nh_private.advertise<std_msgs::Empty>("updates", 10);
+  
   // Spin
   ros::spin();
   // Exit

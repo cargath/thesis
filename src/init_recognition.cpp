@@ -43,18 +43,20 @@ using namespace sensor_msgs;
 #define CAMERA_DEBUG_IMAGE_WINDOW "Camera Debug Image"
 #define MIPMAP_DEBUG_IMAGE_WINDOW "Mipmap Debug Image"
 
+// Camera orientation seen from the camera POV
+static const cv::Point3f YPR_CAMERA = xyz2ypr(cv::Point3f(0.0f, 0.0f, 1.0f));
+
 // Config parameters
 std::string camera_frame,
             map_frame;
-            
+
+bool        debug;
+
 int         mipmap_level,
             max_objects_per_frame,
             max_nof_keypoints;
             
 double      knn_1to2_ratio;
-
-// Camera orientation seen from the camera POV
-static const cv::Point3f YPR_CAMERA = xyz2ypr(cv::Point3f(0.0f, 0.0f, 1.0f));
 
 // FPS counter for debugging purposes
 FPSCalculator fps_calculator;
@@ -104,7 +106,7 @@ bool reset(int mipmaps)
   // Set mipmap level
   if(mipmaps < 0)
   {
-    ROS_ERROR("Mipmap level (%i) out of bounds.", mipmaps);
+    ROS_ERROR("Perception: Mipmap level (%i) out of bounds.", mipmaps);
     return false;
   }
   ROS_INFO("Mipmap level: %i.", mipmaps);
@@ -148,7 +150,7 @@ bool reset(int mipmaps)
   }
   else
   {
-    ROS_ERROR("Failed to call service 'thesis_database/get_all'.");
+    ROS_ERROR("Perception: Failed to call service 'thesis_database/get_all'.");
     return false;
   }
 }
@@ -397,8 +399,11 @@ void callback_simple(const cv::Mat& camera_image,
               camera_debug_image);
   }
   // Show debug image
-  cv::imshow(CAMERA_DEBUG_IMAGE_WINDOW, camera_debug_image);
-  cv::waitKey(3);
+  if(debug)
+  {
+    cv::imshow(CAMERA_DEBUG_IMAGE_WINDOW, camera_debug_image);
+    cv::waitKey(3);
+  }
 }
 
 void callback_mipmapping(const cv::Mat& camera_image,
@@ -435,9 +440,13 @@ void callback_mipmapping(const cv::Mat& camera_image,
   if(mipmap_findings.size() < 1 && tracking_objects.size() < 1)
   {
     // Show debug image
-    cv::imshow(CAMERA_DEBUG_IMAGE_WINDOW, camera_debug_image);
-    cv::imshow(MIPMAP_DEBUG_IMAGE_WINDOW, mipmap_debug_image);
-    cv::waitKey(3);
+    if(debug)
+    {
+      cv::imshow(CAMERA_DEBUG_IMAGE_WINDOW, camera_debug_image);
+      cv::imshow(MIPMAP_DEBUG_IMAGE_WINDOW, mipmap_debug_image);
+      cv::waitKey(3);
+    }
+    //
     return;
   }
   // Create a vector holding
@@ -502,9 +511,12 @@ void callback_mipmapping(const cv::Mat& camera_image,
     }
   }
   // Show debug image
-  cv::imshow(CAMERA_DEBUG_IMAGE_WINDOW, camera_debug_image);
-  cv::imshow(MIPMAP_DEBUG_IMAGE_WINDOW, mipmap_debug_image);
-  cv::waitKey(3);
+  if(debug)
+  {
+    cv::imshow(CAMERA_DEBUG_IMAGE_WINDOW, camera_debug_image);
+    cv::imshow(MIPMAP_DEBUG_IMAGE_WINDOW, mipmap_debug_image);
+    cv::waitKey(3);
+  }
 }
 
 void callback_openni(const Image::ConstPtr& rgb_input,
@@ -525,7 +537,7 @@ void callback_openni(const Image::ConstPtr& rgb_input,
   }
   catch (cv_bridge::Exception& e)
   {
-    ROS_ERROR("cv_bridge exception: %s", e.what());
+    ROS_ERROR("Perception: cv_bridge exception: %s", e.what());
     return;
   }
   // Depth values are stored as 32bit float
@@ -574,9 +586,6 @@ int main(int argc, char** argv)
   ros::init(argc, argv, "thesis_recognition");
   ros::NodeHandle nh;
   ros::NodeHandle nh_private("~");
-  // Create debug image window
-  cv::namedWindow(CAMERA_DEBUG_IMAGE_WINDOW);
-  cv::namedWindow(MIPMAP_DEBUG_IMAGE_WINDOW);
   
   // Get global parameters
   std::string rgb_image_topic,
@@ -595,18 +604,32 @@ int main(int argc, char** argv)
   ROS_INFO("  Camera info topic: %s.", camera_info_topic.c_str());
   ROS_INFO("  Camera frame:      %s.", camera_frame.c_str());
   ROS_INFO("  Map frame:         %s.", map_frame.c_str());
+  std::cout << std::endl;
   
   // Get local parameters
-  nh_private.param("mipmap_level", mipmap_level, 0);
+  nh_private.param("debug",                 debug,                 false);
+  nh_private.param("mipmap_level",          mipmap_level,          0);
   nh_private.param("max_objects_per_frame", max_objects_per_frame, 1);
-  nh_private.param("max_nof_keypoints", max_nof_keypoints, 64);
-  nh_private.param("knn_1to2_ratio", knn_1to2_ratio, 0.9);
+  nh_private.param("max_nof_keypoints",     max_nof_keypoints,     64);
+  nh_private.param("knn_1to2_ratio",        knn_1to2_ratio,        0.9);
   
   ROS_INFO("Perception (local parameters): ");
+  ROS_INFO("  Debug mode:              %s.", debug ? "true" : "false");
   ROS_INFO("  Mipmap level:            %i.", mipmap_level);
   ROS_INFO("  Max objects per frame:   %i.", max_objects_per_frame);
   ROS_INFO("  Max number of keypoints: %i.", max_nof_keypoints);
   ROS_INFO("  KNN 1st to 2nd ratio:    %f.", knn_1to2_ratio);
+  std::cout << std::endl;
+  
+  // Create debug image windows
+  if(debug)
+  {
+    cv::namedWindow(CAMERA_DEBUG_IMAGE_WINDOW);
+    if(mipmap_level > 0)
+    {
+      cv::namedWindow(MIPMAP_DEBUG_IMAGE_WINDOW);
+    }
+  }
   
   // Initialize reusable service clients
   ros::service::waitForService("thesis_database/get_all", -1);
@@ -621,19 +644,31 @@ int main(int argc, char** argv)
   Subscriber<Image> rgb_subscriber(nh, rgb_image_topic, 1);
   Subscriber<Image> depth_subscriber(nh, depth_image_topic, 1);
   Subscriber<CameraInfo> cam_info_subscriber(nh, camera_info_topic, 1);
+  
   // Use one time-sychronized callback for all OpenNI subscriptions
   typedef sync_policies::ApproximateTime<Image, Image, CameraInfo> SyncPolicy;
   Synchronizer<SyncPolicy> synchronizer(SyncPolicy(10), rgb_subscriber, depth_subscriber, cam_info_subscriber);
   synchronizer.registerCallback(boost::bind(&callback_openni, _1, _2, _3));
+  
   // Subscribe to updates about the database
   ros::Subscriber database_update_subscriber = nh.subscribe("thesis_database/updates", 1, callback_database_update);
+  
   // Publish recognized objects
   object_publisher = nh_private.advertise<thesis::ObjectStamped>("objects", 1000);
+  
   // Spin
   ros::spin();
+  
   // Free memory
-  cv::destroyWindow(CAMERA_DEBUG_IMAGE_WINDOW);
-  cv::destroyWindow(MIPMAP_DEBUG_IMAGE_WINDOW);
+  if(debug)
+  {
+    cv::destroyWindow(CAMERA_DEBUG_IMAGE_WINDOW);
+    if(mipmap_level > 0)
+    {
+      cv::destroyWindow(MIPMAP_DEBUG_IMAGE_WINDOW);
+    }
+  }
+  
   // Exit with success
   return 0;
 }

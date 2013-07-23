@@ -125,8 +125,6 @@ void SiftGPUWrapper::detect(const cv::Mat& image,
                             std::vector<cv::KeyPoint>& keypoints,
                             std::vector<float>& descriptors)
 {
-  ROS_INFO("SiftGPUWrapper: detect()");
-  
   if(error)
   {
     keypoints.clear();
@@ -151,7 +149,7 @@ void SiftGPUWrapper::detect(const cv::Mat& image,
   if(siftgpu->RunSIFT(image.cols, image.rows, data, GL_LUMINANCE, GL_UNSIGNED_BYTE))
   {
     num_features = siftgpu->GetFeatureNum();
-    ROS_INFO("SiftGPUWrapper: Number of features found: %i", num_features);
+    ROS_DEBUG("SiftGPUWrapper: #features found: %i", num_features);
     keys = new SiftGPU::SiftKeypoint[num_features];
     descriptors.resize(128 * num_features);
     //descriptors = new float[128 * num_features];
@@ -177,8 +175,6 @@ bool SiftGPUWrapper::match(const std::vector<float>& descriptors1,
                            const std::vector<float>& descriptors2,
                            std::vector<cv::DMatch>& matches)
 {
-  ROS_INFO("SiftGPUWrapper: match()");
-
   if(!isMatcherInitialized)
   {
     initializeMatcher();
@@ -240,7 +236,7 @@ bool SiftGPUWrapper::match(const std::vector<float>& descriptors1,
     matches.push_back(match);
   }
 
-  ROS_INFO("SiftGPUWrapper: Number of matches found: %lo", matches.size());
+  ROS_DEBUG("SiftGPUWrapper: #matches found: %lo", matches.size());
 
   delete[] match_buf;
 

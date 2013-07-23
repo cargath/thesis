@@ -25,8 +25,10 @@
 // Config parameters
 std::string camera_frame,
             map_frame;
-            
+
 double      tf_timeout;
+
+bool        debug;
 
 // Transform listener
 tf::TransformListener* transform_listener;
@@ -50,16 +52,39 @@ void object_callback(const thesis::ObjectStamped::ConstPtr& input)
   // If available, transform recognized object pose to map frame
   if(!isnan(input->object_pose.pose.position.z))
   {
-    ROS_INFO("Mapping: Object caught.");
-    
+    // Transform object to map space
     transform_listener->transformPose(map_frame, input->object_pose, transformed.object_pose);
     transformed.object_pose.header.stamp = ros::Time(0);
     
-    std::cout << "Object position:         " << input->object_pose.pose.position.x         << ", " << input->object_pose.pose.position.y         << ", " << input->object_pose.pose.position.z         << std::endl;
-    std::cout << "Transformed position:    " << transformed.object_pose.pose.position.x    << ", " << transformed.object_pose.pose.position.y    << ", " << transformed.object_pose.pose.position.z    << std::endl;
-    std::cout << "Object orientation:      " << input->object_pose.pose.orientation.x      << ", " << input->object_pose.pose.orientation.y      << ", " << input->object_pose.pose.orientation.z      << ", " << input->object_pose.pose.orientation.w      << std::endl;
-    std::cout << "Transformed orientation: " << transformed.object_pose.pose.orientation.x << ", " << transformed.object_pose.pose.orientation.y << ", " << transformed.object_pose.pose.orientation.z << ", " << transformed.object_pose.pose.orientation.w << std::endl;
-    std::cout << std::endl;
+    // Debug information
+    if(debug)
+    {
+      ROS_INFO("Mapping: Object caught: %s.", input->object_id.c_str());
+      
+      ROS_INFO("  Object      position:    (%f, %f, %f).",
+               input->object_pose.pose.position.x,
+               input->object_pose.pose.position.y,
+               input->object_pose.pose.position.z);
+               
+      ROS_INFO("  Object      orientation: (%f, %f, %f, %f).",
+               input->object_pose.pose.orientation.x,
+               input->object_pose.pose.orientation.y,
+               input->object_pose.pose.orientation.z,
+               input->object_pose.pose.orientation.w);
+      
+      ROS_INFO("  Transformed position:    (%f, %f, %f).",
+               transformed.object_pose.pose.position.x,
+               transformed.object_pose.pose.position.y,
+               transformed.object_pose.pose.position.z);
+      
+      ROS_INFO("  Transformed orientation: (%f, %f, %f, %f).",
+               transformed.object_pose.pose.orientation.x,
+               transformed.object_pose.pose.orientation.y,
+               transformed.object_pose.pose.orientation.z,
+               transformed.object_pose.pose.orientation.w);
+
+      std::cout << std::endl;
+    }
   }
   // Try adding transformed object to map
   thesis::DatabaseGetByID db_get_by_type_service;
@@ -79,7 +104,7 @@ void object_callback(const thesis::ObjectStamped::ConstPtr& input)
     // Still add object to map
     semantic_map.add(transformed);
     // Error
-    ROS_WARN("Failed to call service 'thesis_database/get_by_type'.");
+    ROS_WARN("Mapping: Failed to call service 'thesis_database/get_by_type'.");
     return;
   }
 }
@@ -121,10 +146,18 @@ int main(int argc, char** argv)
   nh.getParam("/thesis/map_frame",    map_frame);
   nh.getParam("/thesis/tf_timeout",   tf_timeout);
   
-  ROS_INFO("Mapping: ");
+  ROS_INFO("Mapping (global parameters): ");
   ROS_INFO("  Camera frame: %s.", camera_frame.c_str());
   ROS_INFO("  Map frame:    %s.", map_frame.c_str());
   ROS_INFO("  TF timeout:   %f.", tf_timeout);
+  std::cout << std::endl;
+  
+  // Get local parameters
+  nh_private.param("debug", debug, false);
+  
+  ROS_INFO("Mapping (local parameters): ");
+  ROS_INFO("  Debug mode: %s.", debug ? "true" : "false");
+  std::cout << std::endl;
   
   // Create transform listener
   transform_listener = new tf::TransformListener();
