@@ -27,7 +27,19 @@ rosbuild_gensrv()
 # Shared library
 rosbuild_add_library(shared src/math2d.cpp src/fps_calculator.cpp)
 
-# Build SiftGPU
+# Perception library
+rosbuild_add_library(
+  perception
+  src/object_recognizer.cpp
+  src/graham_scanner.cpp
+  src/sift_gpu_wrapper.cpp
+  src/siftgpu_feature_detector.cpp
+  src/siftgpu_descriptor_matcher.cpp
+)
+
+target_link_libraries(perception shared)
+
+# Build SiftGPU + link with perception library
 IF (${USE_SIFT_GPU})
   # Setup SiftGPU directories
 	set(sift_gpu_build_path ${CMAKE_SOURCE_DIR}/external/siftgpu/linux)
@@ -52,25 +64,16 @@ IF (${USE_SIFT_GPU})
 	)
 	# Tell other sources to use SiftGPU
 	add_definitions(-DUSE_SIFT_GPU)
+	# Link with perception
+  target_link_libraries(perception siftgpu)
 ENDIF (${USE_SIFT_GPU})
-
-# Object recognizer library
-IF (${USE_SIFT_GPU})
-  rosbuild_add_library(recognizer src/object_recognizer.cpp src/graham_scanner.cpp src/sift_gpu_wrapper.cpp)
-  target_link_libraries(recognizer shared siftgpu)
-ENDIF (${USE_SIFT_GPU})
-
-IF (NOT ${USE_SIFT_GPU})
-  rosbuild_add_library(recognizer src/object_recognizer.cpp src/graham_scanner.cpp)
-  target_link_libraries(recognizer shared)
-ENDIF (NOT ${USE_SIFT_GPU})
 
 # Node database
 rosbuild_add_executable(init_database src/init_database.cpp src/image_loader.cpp)
 
 # Node recognition
 rosbuild_add_executable(init_recognition src/init_recognition.cpp)
-target_link_libraries(init_recognition shared recognizer)
+target_link_libraries(init_recognition shared perception)
 
 # Node semantic mapping
 rosbuild_add_executable(init_mapping src/init_mapping.cpp src/semantic_map.cpp)

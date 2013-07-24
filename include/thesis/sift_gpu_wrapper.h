@@ -97,23 +97,16 @@ class SiftGPUWrapper
 	   * @param siftImage The transformed image (output).
 	   */
 	  void cvMatToSiftGPU(const cv::Mat& image, unsigned char* siftImage);
-
+	  
 	  /**
-	   * For testing purposes: write a .pgm file of the SiftGPU image
-	   *
-	   * @param fp     A filepointer.
-	   * @param data   The image data (e.g. OpenGL texture).
-	   * @param width  Width.
-	   * @param height Height.
+	   * 
 	   */
-	  void writePGM(FILE *fp, unsigned char* data, int width, int height);
-
-    // Width of the image constant for Kinect
-	  int imageWidth;
-	  // Height of the image constant for Kinect
-	  int imageHeight;
-	  // Image as texture
 	  unsigned char* data;
+	  
+	  /**
+	   * 
+	   */
+	  int data_size;
 
     // Singleton instance
 	  static SiftGPUWrapper* instance;

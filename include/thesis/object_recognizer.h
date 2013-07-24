@@ -52,12 +52,6 @@ class ObjectRecognizer
     
     /**
      */
-    void getPartialImageInfo(const cv::Mat& image,
-                             const std::vector<cv::Point2f>& mask,
-                             ImageInfo& image_info);
-    
-    /**
-     */
     bool recognize(ImageInfo& sample_info,
                    ImageInfo& cam_img_info,
                    std::vector<cv::Point2f>& object_points,

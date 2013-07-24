@@ -22,9 +22,11 @@
 
 #include <thesis/sift_gpu_wrapper.h>
 
-#include <GL/gl.h>
-#include <iostream>
 #include <ros/ros.h>
+
+#include <GL/gl.h>
+
+#include <iostream>
 #include <stdio.h>
 
 using namespace cv;
@@ -35,8 +37,7 @@ SiftGPUWrapper::SiftGPUWrapper()
 {
   data = NULL;
   error = false;
-  imageHeight = 0;
-  imageWidth = 0;
+  data_size = 0;
   siftgpu = new SiftGPU();
   
   char method[] = {"-glsl"};
@@ -78,31 +79,70 @@ SiftGPUWrapper::SiftGPUWrapper()
 
 SiftGPUWrapper::~SiftGPUWrapper()
 {
-  // SiftGPU
-  if(siftgpu != NULL)
-  {
-    delete siftgpu;
-    siftgpu = NULL;
-  }
+  // SiftGPU extractor
+  delete siftgpu;
   // SiftGPU matcher
-  if(matcher != NULL)
-  {
-    delete matcher;
-    matcher = NULL;
-  }
+  delete matcher;
   // Singleton instance of this class
-  if(instance != NULL)
-  {
-    delete instance;
-    instance = NULL;
-  }
+  delete instance;
   // Image as texture
-  if(data != NULL)
-  {
-    free(data);
-    data = NULL;
-  }
+  free(data);
 }
+
+/*bool SiftGPUWrapper::init(const int max_nof_keypoints,
+                          const double knn_1to2_ratio)
+{
+  // Extractor
+  data = NULL;
+  error = false;
+  data_size = 0;
+  
+  siftgpu = new SiftGPU();
+  
+  char method[]           = {"-glsl"};
+
+  char subpixelKey[]      = {"-s"};
+  char subpixelValue[]    = {"0"};
+  char max_flag[]         = {"-tc2"};
+
+  int  max_features = 600;
+  char max_feat_char[10];
+  //
+  sprintf(max_feat_char, "%d", max_features);
+
+  char first_octave[]     = {"-fo"};
+  char first_octave_val[] = {"0"};
+  
+  // nothing but errors
+  char verbosity[]        = {"-v"};
+  // nothing but errors
+  char verbosity_val[]    = {"0"};
+  
+  char* argv[] =
+  {
+    method,
+    subpixelKey,
+    subpixelValue,
+    max_flag,
+    max_feat_char,
+    first_octave,
+    first_octave_val,
+    verbosity,
+    verbosity_val
+  };
+  
+  siftgpu->ParseParam(9, argv);
+
+  if(siftgpu->CreateContextGL() != SiftGPU::SIFTGPU_FULL_SUPPORTED)
+  {
+    ROS_ERROR("SiftGPUWrapper: ");
+    ROS_ERROR("  Can't create OpenGL context! SiftGPU cannot be used.");
+    error = true;
+  }
+
+  // Matcher
+  
+}*/
 
 SiftGPUWrapper* SiftGPUWrapper::getInstance()
 {
@@ -133,14 +173,17 @@ void SiftGPUWrapper::detect(const cv::Mat& image,
     return;
   }
 
-  // Get image
-  if(image.rows != imageHeight || image.cols != imageWidth)
+  // Allocate memory to store image data
+  // No need to allocate memory again for multiple images of the same size
+  int current_image_size = image.rows * image.cols;
+  if(current_image_size != data_size)
   {
-    imageWidth  = image.cols;
-    imageHeight = image.rows;
+    data_size = current_image_size;
     free(data);
-    data = (unsigned char*) malloc(imageWidth * imageHeight);
+    data = (unsigned char*) malloc(data_size);
   }
+  
+  // Convert OpenCV image to SiftGPU image
   cvMatToSiftGPU(image, data);
 
   int num_features = 0;
@@ -272,22 +315,4 @@ void SiftGPUWrapper::cvMatToSiftGPU(const Mat& image, unsigned char* siftImage)
   }
 }
 
-void SiftGPUWrapper::writePGM(FILE *fp, unsigned char* data, int width, int height)
-{
-  int val;
-  fprintf(fp, "P5\n%d %d\n255\n", width, height);
-  for(int y = 0; y < height; y++)
-  {
-    for(int x = 0; x < width; x++)
-    {
-      val = (int) (/* 255.0 */data[y * width + x]);
-      if(x == 0 || y == 0)
-      {
-        val = 255;
-      }
-      fputc(MAX(0, MIN(255, val)), fp);
-    }
-  }
-}
-
-#endif
+#endif // USE_SIFT_GPU

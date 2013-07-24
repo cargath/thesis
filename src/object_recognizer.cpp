@@ -110,52 +110,6 @@ void ObjectRecognizer::getImageInfo(const cv::Mat& image,
   #endif
 }
 
-void ObjectRecognizer::getPartialImageInfo(const cv::Mat& image,
-                                           const std::vector<cv::Point2f>& mask,
-                                           ImageInfo& image_info)
-{
-  ImageInfo temp_image_info;
-  // Remember image size
-  image_info.width  = image.cols;
-  image_info.height = image.rows;
-  // Detect keypoints & descriptors
-  std::vector<cv::KeyPoint> temp_keypoints;
-  #ifdef  USE_SIFT_GPU
-    std::vector<float> temp_descriptors;
-    // Detect keypoints & compute descriptors
-    SiftGPUWrapper::getInstance()->detect(image, temp_keypoints, temp_descriptors);
-    // Filter keypoints & descriptors
-    for(size_t i = 0; i < temp_keypoints.size(); i++)
-    {
-      if(insideConvexPolygon(mask, temp_keypoints[i].pt))
-      {
-        temp_image_info.keypoints.push_back(temp_keypoints[i]);
-        temp_image_info.descriptors.push_back(temp_descriptors[i]); // TODO
-      }
-    }
-  #endif
-  #ifndef USE_SIFT_GPU
-    // Detect keypoints
-    feature_detector.detect(image, temp_keypoints);
-    // Filter keypoints
-    for(size_t i = 0; i < temp_keypoints.size(); i++)
-    {
-      if(insideConvexPolygon(mask, temp_keypoints[i].pt))
-      {
-        temp_image_info.keypoints.push_back(temp_keypoints[i]);
-      }
-    }
-    // Compute descriptors
-    if(!temp_image_info.keypoints.empty())
-    {
-      descriptor_extractor.compute(image, temp_image_info.keypoints, temp_image_info.descriptors);
-    }
-  #endif
-  // Output
-  image_info.keypoints   = temp_image_info.keypoints;
-  image_info.descriptors = temp_image_info.descriptors;
-}
-
 bool ObjectRecognizer::recognize(ImageInfo& sample_info,
                                  ImageInfo& cam_img_info,
                                  std::vector<cv::Point2f>& object_points,
