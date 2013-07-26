@@ -73,8 +73,8 @@ void ObjectRecognizer::filterImageInfo(const ImageInfo& input,
         temp_inside_mask.keypoints.push_back(input.keypoints[i]);
         #ifdef  USE_SIFT_GPU
           temp_inside_mask.descriptors.insert(temp_inside_mask.descriptors.end(),
-                                              input.descriptors.begin()+i,
-                                              input.descriptors.begin()+i+128);
+                                              input.descriptors.begin()+i*128,
+                                              input.descriptors.begin()+i*128+128);
         #endif
         #ifndef USE_SIFT_GPU
           temp_inside_mask.descriptors.push_back(input.descriptors.row(i));
@@ -88,8 +88,8 @@ void ObjectRecognizer::filterImageInfo(const ImageInfo& input,
         temp_outside_mask.keypoints.push_back(input.keypoints[i]);
         #ifdef  USE_SIFT_GPU
           temp_outside_mask.descriptors.insert(temp_outside_mask.descriptors.end(),
-                                               input.descriptors.begin()+i,
-                                               input.descriptors.begin()+i+128);
+                                               input.descriptors.begin()+i*128,
+                                               input.descriptors.begin()+i*128+128);
         #endif
         #ifndef USE_SIFT_GPU
           temp_outside_mask.descriptors.push_back(input.descriptors.row(i));
