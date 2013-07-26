@@ -7,18 +7,10 @@
 #include <thesis/graham_scanner.h>
 #include <thesis/math2d.h>
 
-inline void copyImageInfo(const ObjectRecognizer::ImageInfo& from,
-                          ObjectRecognizer::ImageInfo& to)
-{
-  to.width       = from.width;
-  to.height      = from.height;
-  to.keypoints   = from.keypoints;
-  to.descriptors = from.descriptors;
-}
-
 ObjectRecognizer::ObjectRecognizer()
 {
-  // Default constructor
+  maxImageSize = 1280;
+  maxKeypoints = 128;
 }
 
 ObjectRecognizer::~ObjectRecognizer()
@@ -26,11 +18,42 @@ ObjectRecognizer::~ObjectRecognizer()
   // Default destructor
 }
 
+void ObjectRecognizer::setMaxImageSize(const int maxImageSize)
+{
+  if(this->maxImageSize < maxImageSize)
+  {
+    #ifdef  USE_SIFT_GPU
+      SiftGPUFeatureDetector* detector = SiftGPUFeatureDetector::getInstance();
+      //
+      if(detector->initialized())
+      {
+        detector->setMaxImageSize(maxImageSize);
+      }
+    #endif
+    #ifndef USE_SIFT_GPU
+      // no need to set max image size in OpenCV software mode
+    #endif
+    this->maxImageSize = maxImageSize;
+  }
+}
+
 void ObjectRecognizer::setMaxKeypoints(const int maxKeypoints)
 {
-  #ifndef USE_SIFT_GPU
-    feature_detector = cv::SiftFeatureDetector(maxKeypoints);
-  #endif
+  if(this->maxKeypoints != maxKeypoints)
+  {
+    #ifdef  USE_SIFT_GPU
+      SiftGPUFeatureDetector* detector = SiftGPUFeatureDetector::getInstance();
+      //
+      if(detector->initialized())
+      {
+        detector->setMaxKeypoints(maxKeypoints);
+      }
+    #endif
+    #ifndef USE_SIFT_GPU
+      feature_detector = cv::SiftFeatureDetector(maxKeypoints);
+    #endif
+    this->maxKeypoints = maxKeypoints;
+  }
 }
 
 void ObjectRecognizer::filterImageInfo(const ImageInfo& input,
@@ -77,6 +100,12 @@ void ObjectRecognizer::filterImageInfo(const ImageInfo& input,
   // Output
   if(inside_mask)
   {
+    std::cout << "input keys:      " << input.keypoints.size()                     << std::endl;
+    std::cout << "input descs:     " << input.descriptors.size() / 128             << std::endl;
+    std::cout << "in keypoints:    " << temp_inside_mask.keypoints.size()          << std::endl;
+    std::cout << "in descriptors:  " << temp_inside_mask.descriptors.size() / 128  << std::endl;
+    std::cout << "out keypoints:   " << temp_outside_mask.keypoints.size()         << std::endl;
+    std::cout << "out descriptors: " << temp_outside_mask.descriptors.size() / 128 << std::endl;
     inside_mask->width       = input.width;
     inside_mask->height      = input.height;
     inside_mask->keypoints   = temp_inside_mask.keypoints;
@@ -99,10 +128,19 @@ void ObjectRecognizer::getImageInfo(const cv::Mat& image,
   image_info.height = image.rows;
   // Detect keypoints & descriptors
   #ifdef  USE_SIFT_GPU
-    SiftGPUWrapper::getInstance()->detect(image, image_info.keypoints, image_info.descriptors);
+    SiftGPUFeatureDetector* detector = SiftGPUFeatureDetector::getInstance();
+    // Initialize feature detector (if not initialized yet)
+    if(!detector->initialized())
+    {
+      detector->init(maxKeypoints, maxImageSize);
+    }
+    // Detect keypoints & compute descriptors
+    detector->detect(image, image_info.keypoints, image_info.descriptors);
   #endif
   #ifndef USE_SIFT_GPU
+    // Detect keypoints
     feature_detector.detect(image, image_info.keypoints);
+    // Compute descriptors
     if(!image_info.keypoints.empty())
     {
       descriptor_extractor.compute(image, image_info.keypoints, image_info.descriptors);
@@ -113,7 +151,7 @@ void ObjectRecognizer::getImageInfo(const cv::Mat& image,
 bool ObjectRecognizer::recognize(ImageInfo& sample_info,
                                  ImageInfo& cam_img_info,
                                  std::vector<cv::Point2f>& object_points,
-                                 cv::FlannBasedMatcher* matcher)
+                                 const double knn_1to2_ratio)
 {
   // Otherwise an OpenCV assertion would fail for images without keypoints
   #ifdef  USE_SIFT_GPU
@@ -128,32 +166,35 @@ bool ObjectRecognizer::recognize(ImageInfo& sample_info,
   // Compute matches
   std::vector<cv::DMatch> matches_filtered;
   #ifdef  USE_SIFT_GPU
+    SiftGPUDescriptorMatcher* matcher = SiftGPUDescriptorMatcher::getInstance();
+    // Initialize matcher (if not initialized yet)
+    if(!matcher->initialized())
+    {
+      matcher->init();
+    }
     // Match descriptors
     // SiftGPU already implements filtering
     // - by max distance between two matches
     // - by ratio of nearest and second nearest neighbour distance
     // - by checking if two descriptors are a mutual best match
-    SiftGPUWrapper::getInstance()->match(sample_info.descriptors,
-                                         cam_img_info.descriptors,
-                                         matches_filtered);
+    matcher->match(
+      sample_info.descriptors,
+      cam_img_info.descriptors,
+      matches_filtered,
+      knn_1to2_ratio,
+      knn_1to2_ratio
+    );
   #endif
   #ifndef USE_SIFT_GPU
     // Match descriptors (find the k=2 nearest neighbours)
     std::vector<std::vector<cv::DMatch> > matches;
-    if(matcher)
-    {
-      matcher->knnMatch(sample_info.descriptors, matches, 2);
-    }
-    else
-    {
-      flann_matcher.knnMatch(sample_info.descriptors, cam_img_info.descriptors, matches, 2);
-    }
+    flann_matcher.knnMatch(sample_info.descriptors, cam_img_info.descriptors, matches, 2);
     // Filter matches:
     // By ratio of nearest and second nearest neighbour distance
     for(size_t i = 0; i < matches.size(); i++)
     {
-      float ratio = matches[i][0].distance / matches[i][1].distance;
-      if(ratio < 0.9f)
+      double ratio = matches[i][0].distance / matches[i][1].distance;
+      if(ratio < knn_1to2_ratio)
       {
         matches_filtered.push_back(matches[i][0]);
       }

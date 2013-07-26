@@ -56,7 +56,11 @@ int         mipmap_level,
             max_objects_per_frame,
             max_nof_keypoints;
             
-double      knn_1to2_ratio;
+double      openni_timeout,
+            knn_1to2_ratio;
+
+// We try to get the image size of a connected OpenNI camera (if available)
+bool openni_once = false;
 
 // FPS counter for debugging purposes
 FPSCalculator fps_calculator;
@@ -342,7 +346,10 @@ inline void recognize(const std::string& sample_id,
   // Search for an object until we don't find any more occurrences
   for(unsigned int loops = 0; loops <= max_loops; loops++)
   {
-    if(object_recognizer.recognize(sample_image_info, camera_image_info, object_points))
+    if(object_recognizer.recognize(sample_image_info,
+                                   camera_image_info,
+                                   object_points,
+                                   knn_1to2_ratio))
     {
       // Remove keypoints belonging to this candidate from image info,
       // in order to search for other candidates of the same type
@@ -491,7 +498,10 @@ void callback_mipmapping(const cv::Mat& camera_image,
     // Draw the keypoints belonging to the region we are going to examine
     cv::drawKeypoints(camera_debug_image, inside_mask.keypoints, camera_debug_image, YELLOW);
     // Apply recognizer to the previously processed region of the camera image
-    if(object_recognizer.recognize(database_processed[it->first].first, inside_mask, object_points))
+    if(object_recognizer.recognize(database_processed[it->first].first,
+                                   inside_mask,
+                                   object_points,
+                                   knn_1to2_ratio))
     {
       // Visualize result
       draw_rectangle(object_points, GREEN, camera_debug_image);
@@ -572,12 +582,19 @@ void callback_openni(const Image::ConstPtr& rgb_input,
   {
     publish_object(findings[i], cv_ptr_mono8->image, depth_image);
   }
+  std::cout << std::endl;
 }
 
 void callback_database_update(const std_msgs::Empty::ConstPtr& input)
 {
   // Rebuild the database
   reset(mipmap_level);
+}
+
+void callback_openni_once(const sensor_msgs::CameraInfo::ConstPtr& input)
+{
+  object_recognizer.setMaxImageSize(input->width >= input->height ? input->width : input->height);
+  openni_once = true;
 }
 
 int main(int argc, char** argv)
@@ -597,6 +614,7 @@ int main(int argc, char** argv)
   nh.getParam("/thesis/camera_info_topic", camera_info_topic);
   nh.getParam("/thesis/camera_frame",      camera_frame);
   nh.getParam("/thesis/map_frame",         map_frame);
+  nh.getParam("/thesis/openni_timeout",    openni_timeout);
   
   ROS_INFO("Perception (global parameters): ");
   ROS_INFO("  RGB image topic:   %s.", rgb_image_topic.c_str());
@@ -604,6 +622,7 @@ int main(int argc, char** argv)
   ROS_INFO("  Camera info topic: %s.", camera_info_topic.c_str());
   ROS_INFO("  Camera frame:      %s.", camera_frame.c_str());
   ROS_INFO("  Map frame:         %s.", map_frame.c_str());
+  ROS_INFO("  OpenNI timeout:    %f.", openni_timeout);
   std::cout << std::endl;
   
   // Get local parameters
@@ -618,7 +637,7 @@ int main(int argc, char** argv)
   ROS_INFO("  Mipmap level:            %i.", mipmap_level);
   ROS_INFO("  Max objects per frame:   %i.", max_objects_per_frame);
   ROS_INFO("  Max number of keypoints: %i.", max_nof_keypoints);
-  ROS_INFO("  KNN 1st to 2nd ratio:    %f.", knn_1to2_ratio);
+  ROS_INFO("  kNN 1st to 2nd ratio:    %f.", knn_1to2_ratio);
   std::cout << std::endl;
   
   // Create debug image windows
@@ -630,6 +649,21 @@ int main(int argc, char** argv)
       cv::namedWindow(MIPMAP_DEBUG_IMAGE_WINDOW);
     }
   }
+  
+  // Try to get OpenNI camera image size
+  ros::Subscriber camera_info_once_subscriber = nh.subscribe(camera_info_topic, 1, callback_openni_once);
+  ros::Time wait_time = ros::Time::now();
+  while(!openni_once && ros::ok())
+  {
+    // Spin
+    ros::spinOnce();
+    // Stop if wait time is up
+    if(ros::Time::now().toSec() - wait_time.toSec() > openni_timeout)
+    {
+      break;
+    }
+  }
+  camera_info_once_subscriber.shutdown();
   
   // Initialize reusable service clients
   ros::service::waitForService("thesis_database/get_all", -1);

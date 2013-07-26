@@ -32,7 +32,6 @@ rosbuild_add_library(
   perception
   src/object_recognizer.cpp
   src/graham_scanner.cpp
-  src/sift_gpu_wrapper.cpp
   src/siftgpu_feature_detector.cpp
   src/siftgpu_descriptor_matcher.cpp
 )

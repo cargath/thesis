@@ -7,7 +7,8 @@
 #include <thesis/color.h>
 
 #ifdef  USE_SIFT_GPU
-  #include <thesis/sift_gpu_wrapper.h>
+  #include <thesis/siftgpu_feature_detector.h>
+  #include <thesis/siftgpu_descriptor_matcher.h>
 #endif
 #ifndef USE_SIFT_GPU
   #include <opencv2/nonfree/features2d.hpp>
@@ -36,6 +37,12 @@ class ObjectRecognizer
     ~ObjectRecognizer();
 
     /**
+     *
+     */
+    void setMaxImageSize(const int maxImageSize);
+    
+    /**
+     *
      */
     void setMaxKeypoints(const int maxKeypoints);
 
@@ -55,9 +62,12 @@ class ObjectRecognizer
     bool recognize(ImageInfo& sample_info,
                    ImageInfo& cam_img_info,
                    std::vector<cv::Point2f>& object_points,
-                   cv::FlannBasedMatcher* matcher=NULL);
+                   const double knn_1to2_ratio=0.9);
 
   protected:
+    int maxImageSize,
+        maxKeypoints;
+  
     #ifndef USE_SIFT_GPU
       // Reusable OpenCV stuff for working with images
       cv::SiftFeatureDetector feature_detector;

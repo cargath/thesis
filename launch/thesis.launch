@@ -7,6 +7,7 @@
     thesis/camera_frame:      '/head_mount_kinect_rgb_optical_frame' <!-- /head_mount_kinect_rgb_optical_frame -->
     thesis/map_frame:         '/map'
     thesis/tf_timeout:        0.5
+    thesis/openni_timeout:    5.0
   </rosparam>
 
   <!-- Camera coordinates, 30fps -->
@@ -25,7 +26,7 @@
     <param name="debug"                 type="bool"   value="true"/>
     <param name="mipmap_level"          type="int"    value="1"/>
     <param name="max_objects_per_frame" type="int"    value="5"/>
-    <param name="max_nof_keypoints"     type="int"    value="64"/>
+    <param name="max_nof_keypoints"     type="int"    value="256"/>
     <param name="knn_1to2_ratio"        type="double" value="0.9"/>
   </node>
   
@@ -36,6 +37,6 @@
   
   <!-- Visualisation -->
   <node pkg="thesis" type="init_example" name="thesis_example" output="screen">
-    <param name="debug" type="bool" value="true"/>
+    <param name="debug" type="bool" value="false"/>
   </node>
 </launch>

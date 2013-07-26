@@ -28,14 +28,13 @@
 #include <thesis/DatabaseList.h>
 #include <thesis/DatabaseSetByID.h>
 
-// Constants
-static const double MAX_OPENNI_TOPIC_WAIT_TIME = 5.0;
-
 // Config parameters
 std::string camera_info_topic,
             image_path;
 
 bool        debug;
+
+double      openni_timeout;
 
 // 
 ImageLoader image_loader;
@@ -284,9 +283,11 @@ int main(int argc, char** argv)
   
   // Get global parameters
   nh.getParam("/thesis/camera_info_topic", camera_info_topic);
+  nh.getParam("/thesis/openni_timeout",    openni_timeout);
   
   ROS_INFO("Database (global parameters): ");
   ROS_INFO("  Camera info topic: %s.", camera_info_topic.c_str());
+  ROS_INFO("  OpenNI timeout:    %f.", openni_timeout);
   std::cout << std::endl;
   
   // Get local parameters
@@ -312,7 +313,7 @@ int main(int argc, char** argv)
     // Spin
     ros::spinOnce();
     // Stop if wait time is up
-    if(ros::Time::now().toSec() - wait_time.toSec() > MAX_OPENNI_TOPIC_WAIT_TIME)
+    if(ros::Time::now().toSec() - wait_time.toSec() > openni_timeout)
     {
       break;
     }
