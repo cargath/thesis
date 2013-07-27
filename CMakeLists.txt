@@ -41,8 +41,8 @@ target_link_libraries(perception shared)
 # Build SiftGPU + link with perception library
 IF (${USE_SIFT_GPU})
   # Setup SiftGPU directories
-	set(sift_gpu_build_path ${CMAKE_SOURCE_DIR}/external/siftgpu/linux)
-	include_directories(${CMAKE_CURRENT_BINARY_DIR} external/siftgpu/src)
+	set(sift_gpu_build_path ${CMAKE_SOURCE_DIR}/external/SiftGPU/)
+	include_directories(${CMAKE_CURRENT_BINARY_DIR} external/SiftGPU/src)
 	# Compile SiftGPU
 	message("\n------------------------------------------------------------------\n")
 	message("Compiling SiftGPU...")
@@ -58,7 +58,7 @@ IF (${USE_SIFT_GPU})
 	ENDIF (NOT ${sift_gpu_return} EQUAL 0)
 	# Success: Copy compiled library to lib folder
 	file(
-	  COPY external/siftgpu/linux/bin/libsiftgpu.so
+	  COPY external/SiftGPU/bin/libsiftgpu.so
 	  DESTINATION ../lib/
 	)
 	# Tell other sources to use SiftGPU
