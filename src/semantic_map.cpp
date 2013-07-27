@@ -9,24 +9,39 @@
 
 #include <tf/transform_datatypes.h>
 
-inline bool pos_isnan(geometry_msgs::PoseStamped pose)
-{
-  return (isnan(pose.pose.position.x)
-       || isnan(pose.pose.position.y)
-       || isnan(pose.pose.position.z));
-}
-
-inline bool rot_isnan(geometry_msgs::PoseStamped pose)
-{
-  return (isnan(pose.pose.orientation.x)
-       || isnan(pose.pose.orientation.y)
-       || isnan(pose.pose.orientation.z)
-       || isnan(pose.pose.orientation.w));
-}
-
-inline double evaluate(const thesis::ObjectStamped& o)
+inline double evaluate(const thesis::ObjectStamped& object)
 {
   // TODO
+  
+  /**
+   * Time
+   */
+  double t = (ros::Time::now() - object.object_pose.header.stamp).toSec();
+  
+  /**
+   * Distance
+   */
+  cv::Point3f p_h,
+              p_o;
+  // Current camera position
+  
+  // Object position
+  p_o.x = object.object_pose.pose.position.x;
+  p_o.y = object.object_pose.pose.position.y;
+  p_o.z = object.object_pose.pose.position.z;
+  // Distance
+  double d = dist3f(p_h, p_o);
+  
+  /**
+   * Confidence
+   */
+  
+  
+  /**
+   * Combined (weighted average)
+   */
+  
+  
   
   // x
   double x = 0.5;
@@ -89,7 +104,7 @@ bool SemanticMap::update(thesis::ObjectStamped& object, unsigned int at)
       }
       // Update object position
       #define object_position object_pose.pose.position
-      if(!pos_isnan(object.object_pose))
+      if(!isnan(object.object_position))
       {
         current_object.object_position.x = average(temp.object_position.x, object.object_position.x, temp.accuracy, 1);
         current_object.object_position.y = average(temp.object_position.y, object.object_position.y, temp.accuracy, 1);
@@ -97,11 +112,11 @@ bool SemanticMap::update(thesis::ObjectStamped& object, unsigned int at)
       }
       // Update object orientation
       #define object_orientation object_pose.pose.orientation
-      if(rot_isnan(temp.object_pose))
+      if(isnan(temp.object_orientation))
       {
         current_object.object_orientation = object.object_orientation;
       }
-      else if(!rot_isnan(object.object_pose))
+      else if(!isnan(object.object_orientation))
       {
         tf::Quaternion quaternion_old,
                        quaternion_new;

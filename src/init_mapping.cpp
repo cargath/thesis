@@ -6,6 +6,7 @@
 #include <ros/ros.h>
 
 // Local headers
+#include <thesis/math3d.h>
 #include <thesis/semantic_map.h>
 
 // We are working with TF
@@ -13,6 +14,7 @@
 
 // We want to subscribe to messages of this types
 #include <thesis/ObjectStamped.h>
+using namespace geometry_msgs;
 
 // We want to call these services
 #include <thesis/DatabaseGetByID.h>
@@ -39,22 +41,54 @@ ros::ServiceClient db_get_by_type_client;
 // The actual semantic map, storing recognized objects with map coordinates
 SemanticMap semantic_map;
 
+void camera_2_map(const PoseStamped& pose_camera, PoseStamped& pose_map)
+{
+  //
+  transform_listener->waitForTransform(
+    camera_frame,
+    map_frame,
+    pose_camera.header.stamp,
+    ros::Duration(tf_timeout)
+  );
+  // Transform recognized camera pose to map frame
+  transform_listener->transformPose(map_frame, pose_camera, pose_map);
+  pose_map.header.stamp = ros::Time(0);
+}
+
+cv::Point3f get_current_camera_position()
+{
+  //
+  geometry_msgs::PoseStamped pose_camera;
+  pose_camera.header.stamp    = ros::Time::now();
+  pose_camera.header.frame_id = camera_frame;
+  pose_camera.pose.position.x = 0;
+  pose_camera.pose.position.y = 0;
+  pose_camera.pose.position.z = 0;
+  tf::quaternionTFToMsg(IDENTITY_QUATERNION, pose_camera.pose.orientation);
+  //
+  geometry_msgs::PoseStamped pose_map;
+  camera_2_map(pose_camera, pose_map);
+  //
+  cv::Point3f p;
+  p.x = pose_map.pose.position.x;
+  p.y = pose_map.pose.position.y;
+  p.z = pose_map.pose.position.z;
+  //
+  return p;
+}
+
 void object_callback(const thesis::ObjectStamped::ConstPtr& input)
 {
   // 
   thesis::ObjectStamped transformed;
   transformed.object_id = input->object_id;
-  //
-  transform_listener->waitForTransform(camera_frame, map_frame, input->camera_pose.header.stamp, ros::Duration(tf_timeout));
   // Transform recognized camera pose to map frame
-  transform_listener->transformPose(map_frame, input->camera_pose, transformed.camera_pose);
-  transformed.camera_pose.header.stamp = ros::Time(0);
+  camera_2_map(input->camera_pose, transformed.camera_pose);
   // If available, transform recognized object pose to map frame
   if(!isnan(input->object_pose.pose.position.z))
   {
     // Transform object to map space
-    transform_listener->transformPose(map_frame, input->object_pose, transformed.object_pose);
-    transformed.object_pose.header.stamp = ros::Time(0);
+    camera_2_map(input->object_pose, transformed.object_pose);
     
     // Debug information
     if(debug)

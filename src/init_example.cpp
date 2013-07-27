@@ -5,6 +5,9 @@
 // This is a ROS project
 #include <ros/ros.h>
 
+// Local headers
+#include <thesis/math3d.h>
+
 // We are working with TF
 #include <tf/transform_listener.h>
 
@@ -15,9 +18,6 @@
 // We are going to publish messages of these types
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
-
-// Constants
-static const tf::Quaternion IDENTITY_QUATERNION = tf::createIdentityQuaternion();
 
 // Config parameters
 std::string map_frame;
@@ -34,15 +34,6 @@ ros::Publisher object_pose_publisher;
 // Store markers globally (in order to remove them before publishing new ones)
 visualization_msgs::MarkerArray markers;
 unsigned int unique_marker_id;
-
-inline void normalize_quaternion(geometry_msgs::Quaternion& q)
-{
-  double m = sqrt(q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w);
-  q.x = q.x / m;
-  q.y = q.y / m;
-  q.z = q.z / m;
-  q.w = q.w / m;
-}
 
 void clear_markers()
 {
@@ -71,7 +62,7 @@ void create_markers(thesis::ObjectStamped object)
              object.object_pose.pose.orientation.w);
   }
   
-  normalize_quaternion(object.object_pose.pose.orientation);
+  normalize_quaternion_msg(object.object_pose.pose.orientation);
   
   if(debug)
   {

@@ -6,6 +6,40 @@
 
 #include <thesis/math2d.h>
 
+#include <tf/tf.h>
+
+// Constants
+static const tf::Quaternion IDENTITY_QUATERNION = tf::createIdentityQuaternion();
+
+
+/**
+ * Quaternions.
+ */
+
+inline bool isnan(geometry_msgs::Quaternion q)
+{
+  return isnan(q.x * q.y * q.z * q.w);
+}
+
+inline void normalize_quaternion_msg(geometry_msgs::Quaternion& q)
+{
+  double m = sqrt(q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w);
+  q.x = q.x / m;
+  q.y = q.y / m;
+  q.z = q.z / m;
+  q.w = q.w / m;
+}
+
+
+/**
+ * Points.
+ */
+
+inline bool isnan(geometry_msgs::Point p)
+{
+  return isnan(p.x * p.y * p.z);
+}
+
 inline bool isnan(cv::Point3f p)
 {
   return isnan(p.x * p.y * p.z);
