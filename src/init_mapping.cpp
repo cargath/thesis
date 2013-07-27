@@ -146,6 +146,7 @@ void object_callback(const thesis::ObjectStamped::ConstPtr& input)
 bool get_all(thesis::MappingGetAll::Request& request,
              thesis::MappingGetAll::Response& result)
 {
+  semantic_map.setCurrentPosition(get_current_camera_position());
   semantic_map.getAll(result.objects);
   return true;
 }
@@ -153,6 +154,7 @@ bool get_all(thesis::MappingGetAll::Request& request,
 bool get_by_type(thesis::MappingGetByID::Request& request,
                  thesis::MappingGetByID::Response& result)
 {
+  semantic_map.setCurrentPosition(get_current_camera_position());
   semantic_map.getByID(request.id, result.objects);
   return true;
 }
@@ -164,6 +166,7 @@ bool get_by_position(thesis::MappingGetByPosition::Request& request,
   p.x = request.position.x;
   p.y = request.position.y;
   p.z = request.position.z;
+  semantic_map.setCurrentPosition(get_current_camera_position());
   semantic_map.getByPosition(p, result.objects);
   return true;
 }

@@ -9,38 +9,38 @@
 
 #include <tf/transform_datatypes.h>
 
-inline double evaluate(const thesis::ObjectStamped& object)
+SemanticMap::SemanticMap()
+{
+  // Starting position
+  currentPosition.x = 0;
+  currentPosition.y = 0;
+  currentPosition.z = 0;
+}
+
+SemanticMap::~SemanticMap()
+{
+  // Default destructor
+}
+
+double SemanticMap::evaluate(const thesis::ObjectStamped& object, cv::Point3f p_c)
 {
   // TODO
   
-  /**
-   * Time
-   */
+  // Time
   double t = (ros::Time::now() - object.object_pose.header.stamp).toSec();
   
-  /**
-   * Distance
-   */
-  cv::Point3f p_h,
-              p_o;
-  // Current camera position
-  
   // Object position
+  cv::Point3f p_o;
   p_o.x = object.object_pose.pose.position.x;
   p_o.y = object.object_pose.pose.position.y;
   p_o.z = object.object_pose.pose.position.z;
   // Distance
-  double d = dist3f(p_h, p_o);
+  double d = dist3f(p_c, p_o);
   
-  /**
-   * Confidence
-   */
+  // Confidence
   
   
-  /**
-   * Combined (weighted average)
-   */
-  
+  // Combined (weighted average)
   
   
   // x
@@ -58,22 +58,9 @@ inline double evaluate(const thesis::ObjectStamped& object)
   return y;
 }
 
-struct EvaluationComparator
+void SemanticMap::setCurrentPosition(cv::Point3f p)
 {
-  bool operator() (const thesis::ObjectStamped& a, const thesis::ObjectStamped& b)
-  {
-    return evaluate(a) < evaluate(b);
-  }
-} evaluationComparator;
-
-SemanticMap::SemanticMap()
-{
-  // Default constructor
-}
-
-SemanticMap::~SemanticMap()
-{
-  // Default destructor
+  currentPosition = p;
 }
 
 bool SemanticMap::exists(std::string id)
@@ -208,6 +195,7 @@ void SemanticMap::getAll(std::vector<thesis::ObjectStamped>& out)
     out.insert(out.end(), it->second.begin(), it->second.end());
   }
   //
+  EvaluationComparator evaluationComparator(this);
   std::sort(out.begin(), out.end(), evaluationComparator);
 }
 
@@ -216,6 +204,7 @@ void SemanticMap::getByID(std::string id, std::vector<thesis::ObjectStamped>& ou
   //
   out = map[id];
   //
+  EvaluationComparator evaluationComparator(this);
   std::sort(out.begin(), out.end(), evaluationComparator);
 }
 
@@ -236,6 +225,7 @@ void SemanticMap::getByIDAtPosition(std::string id, cv::Point3f p, std::vector<t
     }
   }
   //
+  EvaluationComparator evaluationComparator(this);
   std::sort(out.begin(), out.end(), evaluationComparator);
 }
 
@@ -257,5 +247,6 @@ void SemanticMap::getByPosition(cv::Point3f p, std::vector<thesis::ObjectStamped
     }
   }
   //
+  EvaluationComparator evaluationComparator(this);
   std::sort(out.begin(), out.end(), evaluationComparator);
 }
