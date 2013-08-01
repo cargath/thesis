@@ -62,6 +62,7 @@ class ObjectRecognizer
     bool recognize(ImageInfo& sample_info,
                    ImageInfo& cam_img_info,
                    std::vector<cv::Point2f>& object_points,
+                   double& confidence,
                    const double knn_1to2_ratio=0.9);
 
   protected:

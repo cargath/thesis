@@ -1,0 +1,3 @@
+string type_id
+float64 confidence
+geometry_msgs/PoseStamped pose_stamped

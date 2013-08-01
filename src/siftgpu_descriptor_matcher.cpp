@@ -85,9 +85,7 @@ bool SiftGPUDescriptorMatcher::match(const std::vector<float>& descriptors1,
     knn_1to2_ratio,
     mutual_best_match
   );
-  ROS_INFO("Descriptors1: %lo; num1: %i", descriptors1.size(), num1);
-  ROS_INFO("Descriptors2: %lo; num2: %i", descriptors2.size(), num2);
-  ROS_INFO("SiftGPU Descriptor Matcher: #matches found: %i", nof_matches);
+  ROS_DEBUG("SiftGPU Descriptor Matcher: #matches found: %i", nof_matches);
   //
   cv::DMatch match;
   int counter = 0;

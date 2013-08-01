@@ -7,37 +7,28 @@
 #include <thesis/math.h>
 #include <thesis/math3d.h>
 
-#include <tf/transform_datatypes.h>
-
-SemanticMap::SemanticMap()
-{
-  // Starting position
-  currentPosition.x = 0;
-  currentPosition.y = 0;
-  currentPosition.z = 0;
-}
-
-SemanticMap::~SemanticMap()
-{
-  // Default destructor
-}
-
-double SemanticMap::evaluate(const thesis::ObjectStamped& object, cv::Point3f p_c)
+double SemanticMap::EvaluationComparator::evaluate
+(
+  const thesis::ObjectInstance& object,
+  cv::Point3f p_c
+)
 {
   // TODO
   
   // Time
-  double t = (ros::Time::now() - object.object_pose.header.stamp).toSec();
+  double t = (ros::Time::now() - object.pose_stamped.header.stamp).toSec();
   
   // Object position
   cv::Point3f p_o;
-  p_o.x = object.object_pose.pose.position.x;
-  p_o.y = object.object_pose.pose.position.y;
-  p_o.z = object.object_pose.pose.position.z;
+  p_o.x = object.pose_stamped.pose.position.x;
+  p_o.y = object.pose_stamped.pose.position.y;
+  p_o.z = object.pose_stamped.pose.position.z;
   // Distance
   double d = dist3f(p_c, p_o);
   
   // Confidence
+  // - seen for how many consecutive frames
+  // - ratio of matching keypoints on average
   
   
   // Combined (weighted average)
@@ -58,9 +49,69 @@ double SemanticMap::evaluate(const thesis::ObjectStamped& object, cv::Point3f p_
   return y;
 }
 
-void SemanticMap::setCurrentPosition(cv::Point3f p)
+thesis::ObjectInstance SemanticMap::ObjectQueue::combined()
 {
-  currentPosition = p;
+  thesis::ObjectInstance o;
+  o.type_id = deque.front().type_id;
+  
+  double confidence_sum = 0.0,
+         yaw_sum        = 0.0,
+         pitch_sum      = 0.0,
+         roll_sum       = 0.0;
+  
+  for(size_t i = 0; i < deque.size(); i++)
+  {
+    thesis::ObjectInstance current = deque.at(i);
+    //
+    confidence_sum += current.confidence;
+    //
+    o.confidence += current.confidence * current.confidence;
+    //
+    o.pose_stamped.pose.position.x
+      += current.pose_stamped.pose.position.x * current.confidence;
+    o.pose_stamped.pose.position.y
+      += current.pose_stamped.pose.position.y * current.confidence;
+    o.pose_stamped.pose.position.z
+      += current.pose_stamped.pose.position.z * current.confidence;
+    //
+    tf::Quaternion quaternion_tf;
+    tf::quaternionMsgToTF(
+      current.pose_stamped.pose.orientation,
+      quaternion_tf
+    );
+    tf::Matrix3x3 matTemp(quaternion_tf);
+    double roll, pitch, yaw;
+    matTemp.getRPY(roll, pitch, yaw);
+    yaw_sum   += yaw   * current.confidence;
+    pitch_sum += pitch * current.confidence;
+    roll_sum  += roll  * current.confidence;
+  }
+  
+  o.confidence /= confidence_sum;
+  
+  o.pose_stamped.pose.position.x /= confidence_sum;
+  o.pose_stamped.pose.position.y /= confidence_sum;
+  o.pose_stamped.pose.position.z /= confidence_sum;
+  
+  yaw_sum   /= confidence_sum;
+  pitch_sum /= confidence_sum;
+  roll_sum  /= confidence_sum;
+  
+  o.pose_stamped.pose.orientation
+    = tf::createQuaternionMsgFromRollPitchYaw(roll_sum, pitch_sum, yaw_sum);
+  
+  return o;
+}
+
+void SemanticMap::ObjectQueue::add(thesis::ObjectInstance& o)
+{
+  // enqueue
+  deque.push_back(o);
+  // dequeue
+  if((int) deque.size() > memory_size)
+  {
+    deque.pop_front();
+  }
 }
 
 bool SemanticMap::exists(std::string id)
@@ -76,149 +127,146 @@ bool SemanticMap::exists(std::string id)
   return true;
 }
 
-bool SemanticMap::update(thesis::ObjectStamped& object, unsigned int at)
+void SemanticMap::setCurrentPosition(cv::Point3f p)
 {
-  if(exists(object.object_id))
-  {
-    std::vector<thesis::ObjectStamped>* existing_objects = &(map.at(object.object_id));
-    if(existing_objects->size() > at)
-    {
-      thesis::ObjectStamped temp = existing_objects->at(at);
-      #define current_object existing_objects->at(at)
-      if(temp.accuracy < INT_MAX - 2)
-      {
-        current_object.accuracy++;
-      }
-      // Update object position
-      #define object_position object_pose.pose.position
-      if(!isnan(object.object_position))
-      {
-        current_object.object_position.x = average(temp.object_position.x, object.object_position.x, temp.accuracy, 1);
-        current_object.object_position.y = average(temp.object_position.y, object.object_position.y, temp.accuracy, 1);
-        current_object.object_position.z = average(temp.object_position.z, object.object_position.z, temp.accuracy, 1);
-      }
-      // Update object orientation
-      #define object_orientation object_pose.pose.orientation
-      if(isnan(temp.object_orientation))
-      {
-        current_object.object_orientation = object.object_orientation;
-      }
-      else if(!isnan(object.object_orientation))
-      {
-        tf::Quaternion quaternion_old,
-                       quaternion_new;
-        tf::quaternionMsgToTF(temp.object_orientation,   quaternion_old);
-        tf::quaternionMsgToTF(object.object_orientation, quaternion_new);
-        double accuracy_normalized = 1.0 / INT_MAX * temp.accuracy;
-        tf::Quaternion quaternion_interpolated = quaternion_old.slerp(quaternion_new, 1.0 - accuracy_normalized);
-        tf::quaternionTFToMsg(quaternion_interpolated, current_object.object_orientation);
-      }
-      // Success
-      return true;
-    }
-    else
-    {
-      return false;
-    }
-  }
-  else
-  {
-    return false;
-  }
+  currentPosition = p;
 }
 
-bool SemanticMap::add(thesis::ObjectStamped& object, float min_distance)
+void SemanticMap::add(thesis::ObjectInstance& object, float min_distance)
 {
-  cv::Point3f p, p_;
-  p_.x = object.object_pose.pose.position.x;
-  p_.y = object.object_pose.pose.position.y;
-  p_.z = object.object_pose.pose.position.z;
-  // Check already stored objects of the same type
-  std::vector<thesis::ObjectStamped>* existing_objects = &(map[object.object_id]);
-  unsigned int at = 0;
-  bool exists = false;
-  for(size_t i = 0; i < existing_objects->size(); i++)
+  cv::Point3f p;
+  p.x = object.pose_stamped.pose.position.x;
+  p.y = object.pose_stamped.pose.position.y;
+  p.z = object.pose_stamped.pose.position.z;
+  // Check for already stored objects of the same type
+  std::vector<std::vector<ObjectQueue>::iterator> existing_objects;
+  if(exists(object.type_id))
   {
-    cv::Point3f p;
-    p.x = existing_objects->at(i).object_pose.pose.position.x;
-    p.y = existing_objects->at(i).object_pose.pose.position.y;
-    p.z = existing_objects->at(i).object_pose.pose.position.z;
-    // If there is already an object of the same type close to the new objects position,
-    // update its position instead of adding the new object
-    if(dist3f(p, p_) < min_distance)
+    std::vector<ObjectQueue>::iterator iter = map[object.type_id].begin();
+    for(; iter < map[object.type_id].end(); iter++)
     {
-      if(exists)
+      thesis::ObjectInstance temp = iter->combined();
+      cv::Point3f p_;
+      p_.x = temp.pose_stamped.pose.position.x;
+      p_.y = temp.pose_stamped.pose.position.y;
+      p_.z = temp.pose_stamped.pose.position.z;
+      if(dist3f(p, p_) <= min_distance)
       {
-        ROS_WARN("Semantic map: ");
-        ROS_WARN("  Multiple existing objects of type %s at position (%f, %f, %f)",
-                 object.object_id.c_str(),
-                 object.object_pose.pose.position.x,
-                 object.object_pose.pose.position.y,
-                 object.object_pose.pose.position.z);
+        existing_objects.push_back(iter);
       }
-      exists = true;
-      at = i;
     }
   }
-  // If an object of this type already exists at the same position,
-  // update the entry
-  if(exists)
+  // If more than one object of this type exist at the same position...
+  if(existing_objects.size() > 1)
+  {
+    // ...look for the closest
+    std::vector<ObjectQueue>::iterator closest;
+    float closest_distance = FLT_MAX;
+    for(size_t i = 0; i < existing_objects.size(); i++)
+    {
+      thesis::ObjectInstance temp = existing_objects[i]->combined();
+      cv::Point3f p_;
+      p_.x = temp.pose_stamped.pose.position.x;
+      p_.y = temp.pose_stamped.pose.position.y;
+      p_.z = temp.pose_stamped.pose.position.z;
+      float current_distance = dist3f(p, p_);
+      if(current_distance < closest_distance)
+      {
+        closest_distance = current_distance;
+        closest = existing_objects[i];
+      }
+    }
+    // ...update its entry
+    closest->add(object);
+    // ...and warn the user
+    ROS_WARN("Semantic map: ");
+    ROS_WARN("  Multiple existing objects of type %s at position (%f, %f, %f).",
+      object.type_id.c_str(),
+      object.pose_stamped.pose.position.x,
+      object.pose_stamped.pose.position.y,
+      object.pose_stamped.pose.position.z
+    );
+  }
+  // If one object of this type already exists at the same position...
+  else if(existing_objects.size() == 1)
   {
     ROS_INFO("Semantic map: ");
-    ROS_INFO("  Updating %s at (%f, %f, %f)",
-             object.object_id.c_str(),
-             object.object_pose.pose.position.x,
-             object.object_pose.pose.position.y,
-             object.object_pose.pose.position.z);
-    return update(object, at);
+    ROS_INFO("  Updating %s at (%f, %f, %f).",
+      object.type_id.c_str(),
+      object.pose_stamped.pose.position.x,
+      object.pose_stamped.pose.position.y,
+      object.pose_stamped.pose.position.z
+    );
+    // ...update the entry
+    existing_objects.front()->add(object);
   }
-  // If there isn't already an object of this type,
-  // create a new entry
+  // If there isn't already an object of this type...
   else
   {
     ROS_INFO("Semantic map: ");
-    ROS_INFO("  Adding %s at (%f, %f, %f)",
-             object.object_id.c_str(),
-             object.object_pose.pose.position.x,
-             object.object_pose.pose.position.y,
-             object.object_pose.pose.position.z);
-    existing_objects->push_back(object);
-    return true;
+    ROS_INFO("  Adding %s at (%f, %f, %f).",
+      object.type_id.c_str(),
+      object.pose_stamped.pose.position.x,
+      object.pose_stamped.pose.position.y,
+      object.pose_stamped.pose.position.z
+    );
+    // ...create a new entry
+    ObjectQueue entry;
+    entry.add(object);
+    map[object.type_id].push_back(entry);
   }
 }
 
-void SemanticMap::getAll(std::vector<thesis::ObjectStamped>& out)
+void SemanticMap::getAll(std::vector<thesis::ObjectInstance>& out)
 {
   //
-  for(ObjectMap::iterator it = map.begin(); it != map.end(); it++)
+  std::map<std::string, std::vector<ObjectQueue> >::iterator it = map.begin();
+  for(; it != map.end(); it++)
   {
-    out.insert(out.end(), it->second.begin(), it->second.end());
+    for(size_t i = 0; i < it->second.size(); i++)
+    {
+      out.push_back(it->second[i].combined());
+    }
   }
   //
   EvaluationComparator evaluationComparator(this);
   std::sort(out.begin(), out.end(), evaluationComparator);
 }
 
-void SemanticMap::getByID(std::string id, std::vector<thesis::ObjectStamped>& out)
+void SemanticMap::getByID
+(
+  std::string id,
+  std::vector<thesis::ObjectInstance>& out
+)
 {
   //
-  out = map[id];
+  std::vector<ObjectQueue> objects = map[id];
+  for(size_t i = 0; i < objects.size(); i++)
+  {
+    out.push_back(objects[i].combined());
+  }
   //
   EvaluationComparator evaluationComparator(this);
   std::sort(out.begin(), out.end(), evaluationComparator);
 }
 
-void SemanticMap::getByIDAtPosition(std::string id, cv::Point3f p, std::vector<thesis::ObjectStamped>& out, float max_distance)
+void SemanticMap::getByIDAtPosition
+(
+  std::string id,
+  cv::Point3f p,
+  std::vector<thesis::ObjectInstance>& out,
+  float max_distance
+)
 {
   //
-  std::vector<thesis::ObjectStamped> objects;
+  std::vector<thesis::ObjectInstance> objects;
   getByID(id, objects);
   for(size_t i = 0; i < objects.size(); i++)
   {
     cv::Point3f p_;
-    p_.x = objects[i].object_pose.pose.position.x;
-    p_.y = objects[i].object_pose.pose.position.y;
-    p_.z = objects[i].object_pose.pose.position.z;
+    p_.x = objects[i].pose_stamped.pose.position.x;
+    p_.y = objects[i].pose_stamped.pose.position.y;
+    p_.z = objects[i].pose_stamped.pose.position.z;
     if(dist3f(p, p_) < max_distance)
     {
       out.push_back(objects[i]);
@@ -229,20 +277,27 @@ void SemanticMap::getByIDAtPosition(std::string id, cv::Point3f p, std::vector<t
   std::sort(out.begin(), out.end(), evaluationComparator);
 }
 
-void SemanticMap::getByPosition(cv::Point3f p, std::vector<thesis::ObjectStamped>& out, float max_distance)
+void SemanticMap::getByPosition
+(
+  cv::Point3f p,
+  std::vector<thesis::ObjectInstance>& out,
+  float max_distance
+)
 {
   //
-  for(ObjectMap::iterator it = map.begin(); it != map.end(); it++)
+  std::map<std::string, std::vector<ObjectQueue> >::iterator it = map.begin();
+  for(; it != map.end(); it++)
   {
     for(size_t i = 0; i < it->second.size(); i++)
     {
+      thesis::ObjectInstance current = it->second[i].combined();
       cv::Point3f p_;
-      p_.x = it->second[i].object_pose.pose.position.x;
-      p_.y = it->second[i].object_pose.pose.position.y;
-      p_.z = it->second[i].object_pose.pose.position.z;
+      p_.x = current.pose_stamped.pose.position.x;
+      p_.y = current.pose_stamped.pose.position.y;
+      p_.z = current.pose_stamped.pose.position.z;
       if(dist3f(p, p_) <= max_distance)
       {
-        out.push_back(it->second[i]);
+        out.push_back(current);
       }
     }
   }

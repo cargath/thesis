@@ -49,35 +49,35 @@ void clear_markers()
   unique_marker_id = 0;
 }
 
-void create_markers(thesis::ObjectStamped object)
+void create_markers(thesis::ObjectInstance object)
 {
   visualization_msgs::Marker object_marker;
   
   if(debug)
   {
     ROS_INFO("Quaternion before normalization: (%f, %f, %f, %f).",
-             object.object_pose.pose.orientation.x,
-             object.object_pose.pose.orientation.y,
-             object.object_pose.pose.orientation.z,
-             object.object_pose.pose.orientation.w);
+             object.pose_stamped.pose.orientation.x,
+             object.pose_stamped.pose.orientation.y,
+             object.pose_stamped.pose.orientation.z,
+             object.pose_stamped.pose.orientation.w);
   }
   
-  normalize_quaternion_msg(object.object_pose.pose.orientation);
+  normalize_quaternion_msg(object.pose_stamped.pose.orientation);
   
   if(debug)
   {
     ROS_INFO("Quaternion after normalization:  (%f, %f, %f, %f).",
-             object.object_pose.pose.orientation.x,
-             object.object_pose.pose.orientation.y,
-             object.object_pose.pose.orientation.z,
-             object.object_pose.pose.orientation.w);
+             object.pose_stamped.pose.orientation.x,
+             object.pose_stamped.pose.orientation.y,
+             object.pose_stamped.pose.orientation.z,
+             object.pose_stamped.pose.orientation.w);
     std::cout << std::endl;
   }
   
   //
-  if(isnan(object.object_pose.pose.orientation.w))
+  if(isnan(object.pose_stamped.pose.orientation.w))
   {
-    tf::quaternionTFToMsg(IDENTITY_QUATERNION, object.object_pose.pose.orientation);
+    tf::quaternionTFToMsg(IDENTITY_QUATERNION, object.pose_stamped.pose.orientation);
   }
 
   // Setup the values that are valid for all markers
@@ -90,7 +90,7 @@ void create_markers(thesis::ObjectStamped object)
   // Arrow; x-axis
   object_marker.id      = unique_marker_id++;
   object_marker.type    = visualization_msgs::Marker::ARROW;
-  object_marker.pose    = object.object_pose.pose;
+  object_marker.pose    = object.pose_stamped.pose;
   object_marker.scale.x = 0.2;
   object_marker.scale.y = 0.02;
   object_marker.scale.z = 0.02;
@@ -101,7 +101,7 @@ void create_markers(thesis::ObjectStamped object)
   
   // Rotate object pose to represent the other axis
   tf::Quaternion q;
-  tf::quaternionMsgToTF(object.object_pose.pose.orientation, q);
+  tf::quaternionMsgToTF(object.pose_stamped.pose.orientation, q);
   tf::Matrix3x3 matTemp(q);
   double y,
          p,
@@ -128,11 +128,11 @@ void create_markers(thesis::ObjectStamped object)
   
   //
   thesis::DatabaseGetByID db_get_by_type_service;
-  db_get_by_type_service.request.id = object.object_id;
+  db_get_by_type_service.request.id = object.type_id;
   if(db_get_by_type_client.call(db_get_by_type_service))
   {
-    double w = db_get_by_type_service.response.sample.width,
-           h = db_get_by_type_service.response.sample.height;
+    double w = db_get_by_type_service.response.object_class.width,
+           h = db_get_by_type_service.response.object_class.height;
     //
     if(isnan(w) || (w == 0.0))
     {
@@ -145,7 +145,7 @@ void create_markers(thesis::ObjectStamped object)
     // Box; representing a 3D render of the object
     object_marker.id      = unique_marker_id++;
     object_marker.type    = visualization_msgs::Marker::CUBE;
-    object_marker.pose    = object.object_pose.pose;
+    object_marker.pose    = object.pose_stamped.pose;
     object_marker.scale.x = w;
     object_marker.scale.y = h;
     object_marker.scale.z = 0.01;
@@ -164,12 +164,12 @@ void create_markers(thesis::ObjectStamped object)
   // Text; identifies the objects type (since we can't use textures)
   object_marker.id      = unique_marker_id++;
   object_marker.type    = visualization_msgs::Marker::TEXT_VIEW_FACING;
-  object_marker.pose    = object.object_pose.pose;
+  object_marker.pose    = object.pose_stamped.pose;
   object_marker.scale.z = 0.1;
   object_marker.color.r = 1.0;
   object_marker.color.g = 1.0;
   object_marker.color.b = 1.0;
-  object_marker.text    = object.object_id;
+  object_marker.text    = object.type_id;
   markers.markers.push_back(object_marker);
 }
 
@@ -213,15 +213,14 @@ int main(int argc, char** argv)
     {
       // Add identity pose
       // (for verifying axis-arrow markers)
-      thesis::ObjectStamped msg;
-      msg.object_id = "Identity";
-      msg.object_pose.header.stamp       = ros::Time::now();
-      msg.object_pose.header.frame_id    = map_frame;
-      msg.object_pose.pose.position.x    = 0;
-      msg.object_pose.pose.position.y    = 0;
-      msg.object_pose.pose.position.z    = 0;
-      tf::quaternionTFToMsg(IDENTITY_QUATERNION, msg.object_pose.pose.orientation);
-      msg.camera_pose = msg.object_pose;
+      thesis::ObjectInstance msg;
+      msg.type_id = "Identity";
+      msg.pose_stamped.header.stamp       = ros::Time::now();
+      msg.pose_stamped.header.frame_id    = map_frame;
+      msg.pose_stamped.pose.position.x    = 0;
+      msg.pose_stamped.pose.position.y    = 0;
+      msg.pose_stamped.pose.position.z    = 0;
+      tf::quaternionTFToMsg(IDENTITY_QUATERNION, msg.pose_stamped.pose.orientation);
       map_get_all_service.response.objects.push_back(msg);
       // Create various markers for every object
       for(size_t i = 0; i < map_get_all_service.response.objects.size(); i++)
@@ -229,7 +228,7 @@ int main(int argc, char** argv)
         if(debug)
         {
           ROS_INFO("Creating markers for #%lo: ", i);
-          ROS_INFO("%s", map_get_all_service.response.objects[i].object_id.c_str());
+          ROS_INFO("%s", map_get_all_service.response.objects[i].type_id.c_str());
         }
         create_markers(map_get_all_service.response.objects[i]);
       }

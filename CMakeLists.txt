@@ -68,7 +68,7 @@ IF (${USE_SIFT_GPU})
 ENDIF (${USE_SIFT_GPU})
 
 # Node database
-rosbuild_add_executable(init_database src/init_database.cpp src/image_loader.cpp)
+rosbuild_add_executable(init_database src/init_database.cpp src/image_loader.cpp src/database.cpp)
 
 # Node recognition
 rosbuild_add_executable(init_recognition src/init_recognition.cpp)

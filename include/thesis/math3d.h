@@ -8,7 +8,11 @@
 
 #include <tf/tf.h>
 
-// Constants
+/**
+ * Constants.
+ */
+
+// Identity
 static const tf::Quaternion IDENTITY_QUATERNION = tf::createIdentityQuaternion();
 
 

@@ -8,6 +8,7 @@
     thesis/map_frame:         '/map'
     thesis/tf_timeout:        0.5
     thesis/openni_timeout:    5.0
+    thesis/memory_size:       32
   </rosparam>
 
   <!-- Camera coordinates, 30fps -->

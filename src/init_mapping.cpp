@@ -13,8 +13,7 @@
 #include <tf/transform_listener.h>
 
 // We want to subscribe to messages of this types
-#include <thesis/ObjectStamped.h>
-using namespace geometry_msgs;
+#include <thesis/ObjectInstance.h>
 
 // We want to call these services
 #include <thesis/DatabaseGetByID.h>
@@ -24,11 +23,15 @@ using namespace geometry_msgs;
 #include <thesis/MappingGetByID.h>
 #include <thesis/MappingGetByPosition.h>
 
+using namespace geometry_msgs;
+
 // Config parameters
 std::string camera_frame,
             map_frame;
 
 double      tf_timeout;
+
+int         memory_size;
 
 bool        debug;
 
@@ -77,59 +80,57 @@ cv::Point3f get_current_camera_position()
   return p;
 }
 
-void object_callback(const thesis::ObjectStamped::ConstPtr& input)
+void object_callback(const thesis::ObjectInstance::ConstPtr& input)
 {
   // 
-  thesis::ObjectStamped transformed;
-  transformed.object_id = input->object_id;
-  // Transform recognized camera pose to map frame
-  camera_2_map(input->camera_pose, transformed.camera_pose);
+  thesis::ObjectInstance transformed;
+  transformed.type_id = input->type_id;
   // If available, transform recognized object pose to map frame
-  if(!isnan(input->object_pose.pose.position.z))
+  if(!isnan(input->pose_stamped.pose.position))
   {
     // Transform object to map space
-    camera_2_map(input->object_pose, transformed.object_pose);
+    camera_2_map(input->pose_stamped, transformed.pose_stamped);
     
     // Debug information
     if(debug)
     {
-      ROS_INFO("Mapping: Object caught: %s.", input->object_id.c_str());
+      ROS_INFO("Mapping: Object caught: %s.", input->type_id.c_str());
       
       ROS_INFO("  Object      position:    (%f, %f, %f).",
-               input->object_pose.pose.position.x,
-               input->object_pose.pose.position.y,
-               input->object_pose.pose.position.z);
+               input->pose_stamped.pose.position.x,
+               input->pose_stamped.pose.position.y,
+               input->pose_stamped.pose.position.z);
                
       ROS_INFO("  Object      orientation: (%f, %f, %f, %f).",
-               input->object_pose.pose.orientation.x,
-               input->object_pose.pose.orientation.y,
-               input->object_pose.pose.orientation.z,
-               input->object_pose.pose.orientation.w);
+               input->pose_stamped.pose.orientation.x,
+               input->pose_stamped.pose.orientation.y,
+               input->pose_stamped.pose.orientation.z,
+               input->pose_stamped.pose.orientation.w);
       
       ROS_INFO("  Transformed position:    (%f, %f, %f).",
-               transformed.object_pose.pose.position.x,
-               transformed.object_pose.pose.position.y,
-               transformed.object_pose.pose.position.z);
+               transformed.pose_stamped.pose.position.x,
+               transformed.pose_stamped.pose.position.y,
+               transformed.pose_stamped.pose.position.z);
       
       ROS_INFO("  Transformed orientation: (%f, %f, %f, %f).",
-               transformed.object_pose.pose.orientation.x,
-               transformed.object_pose.pose.orientation.y,
-               transformed.object_pose.pose.orientation.z,
-               transformed.object_pose.pose.orientation.w);
+               transformed.pose_stamped.pose.orientation.x,
+               transformed.pose_stamped.pose.orientation.y,
+               transformed.pose_stamped.pose.orientation.z,
+               transformed.pose_stamped.pose.orientation.w);
 
       std::cout << std::endl;
     }
   }
   // Try adding transformed object to map
   thesis::DatabaseGetByID db_get_by_type_service;
-  db_get_by_type_service.request.id = input->object_id;
+  db_get_by_type_service.request.id = input->type_id;
   if(db_get_by_type_client.call(db_get_by_type_service))
   {
     // Compute min distance
     // the object needs to have to existing objects of the same type
     // in order to be considered a new object
-    float min_distance = (db_get_by_type_service.response.sample.width
-                       +  db_get_by_type_service.response.sample.height) / 2;
+    float min_distance = (db_get_by_type_service.response.object_class.width
+                       +  db_get_by_type_service.response.object_class.height) / 2;
     // Add object to semantic map
     semantic_map.add(transformed, min_distance);
   }
@@ -182,12 +183,17 @@ int main(int argc, char** argv)
   nh.getParam("/thesis/camera_frame", camera_frame);
   nh.getParam("/thesis/map_frame",    map_frame);
   nh.getParam("/thesis/tf_timeout",   tf_timeout);
+  nh.getParam("/thesis/memory_size",  memory_size);
   
   ROS_INFO("Mapping (global parameters): ");
   ROS_INFO("  Camera frame: %s.", camera_frame.c_str());
   ROS_INFO("  Map frame:    %s.", map_frame.c_str());
   ROS_INFO("  TF timeout:   %f.", tf_timeout);
+  ROS_INFO("  Memory size:  %i.", memory_size);
   std::cout << std::endl;
+  
+  //
+  semantic_map = SemanticMap(memory_size);
   
   // Get local parameters
   nh_private.param("debug", debug, false);

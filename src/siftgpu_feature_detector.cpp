@@ -150,8 +150,6 @@ bool SiftGPUFeatureDetector::compute(const cv::Mat& image,
                                      const std::vector<cv::KeyPoint>& keypoints,
                                      std::vector<float>& descriptors)
 {
-  // TODO
-  
   //
   if(featureDetector == NULL)
   {

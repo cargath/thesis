@@ -100,12 +100,6 @@ void ObjectRecognizer::filterImageInfo(const ImageInfo& input,
   // Output
   if(inside_mask)
   {
-    std::cout << "input keys:      " << input.keypoints.size()                     << std::endl;
-    std::cout << "input descs:     " << input.descriptors.size() / 128             << std::endl;
-    std::cout << "in keypoints:    " << temp_inside_mask.keypoints.size()          << std::endl;
-    std::cout << "in descriptors:  " << temp_inside_mask.descriptors.size() / 128  << std::endl;
-    std::cout << "out keypoints:   " << temp_outside_mask.keypoints.size()         << std::endl;
-    std::cout << "out descriptors: " << temp_outside_mask.descriptors.size() / 128 << std::endl;
     inside_mask->width       = input.width;
     inside_mask->height      = input.height;
     inside_mask->keypoints   = temp_inside_mask.keypoints;
@@ -151,6 +145,7 @@ void ObjectRecognizer::getImageInfo(const cv::Mat& image,
 bool ObjectRecognizer::recognize(ImageInfo& sample_info,
                                  ImageInfo& cam_img_info,
                                  std::vector<cv::Point2f>& object_points,
+                                 double& confidence,
                                  const double knn_1to2_ratio)
 {
   // Otherwise an OpenCV assertion would fail for images without keypoints
@@ -244,6 +239,13 @@ bool ObjectRecognizer::recognize(ImageInfo& sample_info,
     {
       return false;
     }
+    // Compute ratio of matched keypoints
+    #ifdef  USE_SIFT_GPU
+      confidence = matches_filtered.size() / sample_info.descriptors.size();
+    #endif
+    #ifndef USE_SIFT_GPU
+      confidence = matches_filtered.size() / sample_info.descriptors.rows;
+    #endif
     // Success
     return true;
   }

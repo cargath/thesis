@@ -6,6 +6,7 @@
 #include <ros/ros.h>
 
 // Local headers
+#include <thesis/database.h>
 #include <thesis/image_loader.h>
 
 // Since we use OpenCV to load image files,
@@ -13,8 +14,11 @@
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
 
-// We try to get the image size of an OpenNI camera (if available)
+// We are going to try getting the resolution of an OpenNI camera (if available)
 #include <sensor_msgs/CameraInfo.h>
+
+// My message types
+#include <thesis/ObjectClass.h>
 
 // Empty message to inform subscribing nodes about changes
 #include <std_msgs/Empty.h>
@@ -25,153 +29,36 @@
 #include <thesis/DatabaseAddURL.h>
 #include <thesis/DatabaseGetAll.h>
 #include <thesis/DatabaseGetByID.h>
-#include <thesis/DatabaseList.h>
-#include <thesis/DatabaseSetByID.h>
 
 // Config parameters
 std::string camera_info_topic,
             image_path;
+            
+cv::Size    min_image_size,
+            max_image_size;
 
 bool        debug;
 
 double      openni_timeout;
 
-// 
-ImageLoader image_loader;
+int         memory_size;
 
 // We try to get the image size of a connected OpenNI camera (if available)
 bool openni_once = false;
 cv::Size openni_image_size;
 
-// Image size limits
-cv::Size min_image_size,
-         max_image_size;
+// 
+ImageLoader image_loader;
 
-// Store all sample objects mapped to their IDs for quick access
-typedef std::map<std::string, thesis::Sample> SampleMap;
-SampleMap samples;
+Database    database;
 
 // We are going to inform subscribing nodes about changes
 ros::Publisher update_publisher;
 
-// Check if an entry for this ID exists in the database
-bool exists(std::string id)
-{
-  try
-  {
-    samples.at(id);
-  }
-  catch(const std::out_of_range& oor)
-  {
-    return false;
-  }
-  return true;
-}
 
-bool add_image(cv::Mat& image, std::string name)
-{
-  // Check if image name is valid
-  if(!(name.length() > 0))
-  {
-    ROS_WARN("Error while trying to add an image to the database:");
-    ROS_WARN("  Image name empty.");
-    ROS_WARN("  Don't add it to the database.");
-    return false;
-  }
-  // Check if an image of this name already exists in the database
-  if(exists(name))
-  {
-    ROS_WARN("Error while trying to add an image to the database:");
-    ROS_WARN("  An image of the name '%s' already exists in the database.", name.c_str());
-    ROS_WARN("  Don't add it to the database again.");
-    return false;
-  }
-  // Check if image is large enough
-  if(image.cols < min_image_size.width || image.rows < min_image_size.height)
-  {
-    ROS_WARN("Error while trying to add an image to the database:");
-    ROS_WARN("  Image '%s' is smaller than %i x %i.",
-             name.c_str(), min_image_size.width, min_image_size.height);
-    ROS_WARN("  Don't add it to database.");
-    return false;
-  }
-  // Determine if we need max_image_size in portrait or landscape orientation
-  // in order to match the sample image orientation
-  if(max_image_size.width < max_image_size.height)
-  {
-    max_image_size = (image.cols <  image.rows) ? max_image_size : cv::Size(max_image_size.height, max_image_size.width);
-  }
-  else
-  {
-    max_image_size = (image.cols >= image.rows) ? max_image_size : cv::Size(max_image_size.height, max_image_size.width);
-  }
-  // Resize image (if too large)
-  cv::Mat image_resized;
-  if(image.cols > max_image_size.width || image.rows > max_image_size.height)
-  {
-    // ...determine biggest possible new size with the same aspect ratio
-    cv::Size re_size;
-    float aspect_ratio_width  = (float) max_image_size.width  / (float) image.cols,
-          aspect_ratio_height = (float) max_image_size.height / (float) image.rows;
-    if(aspect_ratio_width < aspect_ratio_height)
-    {
-      re_size = cv::Size(image.cols * aspect_ratio_width,
-                         image.rows * aspect_ratio_width);
-    }
-    else
-    {
-      re_size = cv::Size(image.cols * aspect_ratio_height,
-                         image.rows * aspect_ratio_height);
-    }
-    // ...and resize it accordingly
-    ROS_INFO("While trying to add an image to the database:");
-    ROS_INFO("  Image '%s' is bigger than %i x %i.", name.c_str(), max_image_size.width, max_image_size.height);
-    ROS_INFO("  Resizing it to %i x %i.", re_size.width, re_size.height);
-    cv::resize(image, image_resized, re_size);
-  }
-  else
-  {
-    image_resized = image;
-  }
-  // Create empty sample
-  thesis::Sample sample;
-  sample.id     = name;
-  sample.width  = 0;
-  sample.height = 0;
-  // Convert OpenCV image to ROS image message
-  cv_bridge::CvImage cv_image;
-  cv_image.encoding = sensor_msgs::image_encodings::MONO8;
-  cv_image.image    = image_resized;
-  cv_image.toImageMsg(sample.image);
-  // Add sample to database
-  samples[sample.id] = sample;
-  // Success
-  return true;
-}
-
-bool add_image(sensor_msgs::Image& image, std::string name)
-{
-  // Convert ROS image message to OpenCV image
-  cv_bridge::CvImagePtr cv_ptr;
-  try
-  {
-    cv_ptr = cv_bridge::toCvCopy(image, sensor_msgs::image_encodings::MONO8);
-  }
-  catch(cv_bridge::Exception& e)
-  {
-    ROS_ERROR("cv_bridge exception: %s", e.what());
-    return false;
-  }
-  // Add OpenCV image
-  return add_image(cv_ptr->image, name);
-}
-
-void callback_openni_once(const sensor_msgs::CameraInfo::ConstPtr& input)
-{
-  openni_image_size.width  = input->width;
-  openni_image_size.height = input->height;
-  openni_once = true;
-}
+/**
+ * Adders.
+ */
 
 bool callback_add_urls(thesis::DatabaseAddURL::Request& request,
                        thesis::DatabaseAddURL::Response& result)
@@ -184,7 +71,7 @@ bool callback_add_urls(thesis::DatabaseAddURL::Request& request,
     {
       for(size_t j = 0; j < images.size(); j++)
       {
-        add_image(images[j], filenames[j]);
+        database.add_image(images[j], filenames[j], min_image_size, max_image_size);
       }
     }
   }
@@ -202,13 +89,13 @@ bool callback_add_files(thesis::DatabaseAddFile::Request& request,
     {
       if(request.names.size() >= i && request.names[i].length() > 0)
       {
-        add_image(image, request.names[i]);
+        database.add_image(image, request.names[i], min_image_size, max_image_size);
       }
       else
       {
         ROS_INFO("Add file service:");
         ROS_INFO("  Image name is empty. Using filename ('%s') instead.", filename.c_str());
-        add_image(image, filename);
+        database.add_image(image, filename, min_image_size, max_image_size);
       }
     }
   }
@@ -220,59 +107,59 @@ bool callback_add_images(thesis::DatabaseAddImg::Request& request,
 {
   for(size_t i = 0; i < request.images.size(); i++)
   {
-    add_image(request.images[i], request.names[i]);
+    database.add_image(request.images[i], request.names[i], min_image_size, max_image_size);
   }
   return true;
 }
 
-bool callback_get_list(thesis::DatabaseList::Request& request,
-                       thesis::DatabaseList::Response& result)
-{
-  for(SampleMap::iterator it = samples.begin(); it != samples.end(); it++)
-  {
-    result.list.push_back(it->first);
-  }
-  return true;
-}
+
+/**
+ * Getters.
+ */
 
 bool callback_get_all(thesis::DatabaseGetAll::Request& request,
                       thesis::DatabaseGetAll::Response& result)
 {
-  for(SampleMap::iterator it = samples.begin(); it != samples.end(); it++)
-  {
-    result.samples.push_back(it->second);
-  }
+  result.object_classes = database.getAll();
   return true;
 }
 
 bool callback_get_by_type(thesis::DatabaseGetByID::Request& request,
                           thesis::DatabaseGetByID::Response& result)
 {
-  result.sample = samples[request.id];
-  return true;
-}
-
-bool callback_set_by_type(thesis::DatabaseSetByID::Request& request,
-                          thesis::DatabaseSetByID::Response& result)
-{
-  if(exists(request.sample.id))
+  thesis::ObjectClass temp;
+  if(database.getByID(request.id, temp))
   {
-    thesis::Sample temp = samples[request.sample.id];
-    if(temp.accuracy < INT_MAX - 2)
-    {
-      samples[request.sample.id].accuracy++;
-    }
-    samples[request.sample.id].width  = (temp.width  * temp.accuracy + request.sample.width)  / (temp.accuracy + 1);
-    samples[request.sample.id].height = (temp.height * temp.accuracy + request.sample.height) / (temp.accuracy + 1);
+    result.object_class = temp;
     return true;
   }
   else
   {
-    ROS_WARN("Update entry service:");
-    ROS_WARN("  Could not find an entry for '%s'.", request.sample.id.c_str());
     return false;
   }
 }
+
+
+/**
+ * Non-service callbacks.
+ */
+
+void callback_openni_once(const sensor_msgs::CameraInfo::ConstPtr& input)
+{
+  openni_image_size.width  = input->width;
+  openni_image_size.height = input->height;
+  openni_once = true;
+}
+
+void callback_object_metadata(const thesis::ObjectClass::ConstPtr& input)
+{
+  // TODO
+}
+
+
+/**
+ * Main loop.
+ */
 
 int main(int argc, char** argv)
 {
@@ -284,10 +171,12 @@ int main(int argc, char** argv)
   // Get global parameters
   nh.getParam("/thesis/camera_info_topic", camera_info_topic);
   nh.getParam("/thesis/openni_timeout",    openni_timeout);
+  nh.getParam("/thesis/memory_size",       memory_size);
   
   ROS_INFO("Database (global parameters): ");
   ROS_INFO("  Camera info topic: %s.", camera_info_topic.c_str());
   ROS_INFO("  OpenNI timeout:    %f.", openni_timeout);
+  ROS_INFO("  Memory size:       %i.", memory_size);
   std::cout << std::endl;
   
   // Get local parameters
@@ -344,22 +233,24 @@ int main(int argc, char** argv)
   }
   
   // Create sample database
+  database = Database(memory_size);
   std::vector<cv::Mat> images;
   std::vector<std::string> filenames;
   image_loader.load_directory(image_path, images, filenames);
   for(size_t i = 0; i < images.size(); i++)
   {
-    add_image(images[i], filenames[i]);
+    database.add_image(images[i], filenames[i], min_image_size, max_image_size);
   }
   
   // Advertise services
   ros::ServiceServer srv_add_urls    = nh_private.advertiseService("add_urls",    callback_add_urls);
   ros::ServiceServer srv_add_files   = nh_private.advertiseService("add_files",   callback_add_files);
   ros::ServiceServer srv_add_images  = nh_private.advertiseService("add_images",  callback_add_images);
-  ros::ServiceServer srv_get_list    = nh_private.advertiseService("get_list",    callback_get_list);
   ros::ServiceServer srv_get_all     = nh_private.advertiseService("get_all",     callback_get_all);
   ros::ServiceServer srv_get_by_type = nh_private.advertiseService("get_by_type", callback_get_by_type);
-  ros::ServiceServer srv_set_by_type = nh_private.advertiseService("set_by_type", callback_set_by_type);
+  
+  // SUbscribe to updates on object metadata (e.g. perceived dimensions)
+  ros::Subscriber object_meta_subscriber = nh.subscribe("thesis_recognition/object_metadata", 1, callback_object_metadata);
   
   // We are going to inform subscribing nodes about changes
   update_publisher = nh_private.advertise<std_msgs::Empty>("updates", 10);
