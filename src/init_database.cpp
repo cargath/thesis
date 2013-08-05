@@ -151,9 +151,27 @@ void callback_openni_once(const sensor_msgs::CameraInfo::ConstPtr& input)
   openni_once = true;
 }
 
-void callback_object_metadata(const thesis::ObjectClass::ConstPtr& input)
+void callback_object_dimension(const thesis::ObjectClass::ConstPtr& input)
 {
-  // TODO
+  if(!database.update(*input) && debug)
+  {
+    if(debug)
+    {
+      ROS_WARN("Database: Unable to update values for '%s'.", input->type_id.c_str());
+      std::cout << std::endl;
+    }
+  }
+  else
+  {
+    if(debug)
+    {
+      ROS_INFO("Database: Updating values for '%s': ", input->type_id.c_str());
+      ROS_INFO("  Confidence: %f.", input->confidence);
+      ROS_INFO("  Width:      %f.", input->width);
+      ROS_INFO("  Height:     %f.", input->height);
+      std::cout << std::endl;
+    }
+  }
 }
 
 
@@ -250,7 +268,7 @@ int main(int argc, char** argv)
   ros::ServiceServer srv_get_by_type = nh_private.advertiseService("get_by_type", callback_get_by_type);
   
   // SUbscribe to updates on object metadata (e.g. perceived dimensions)
-  ros::Subscriber object_meta_subscriber = nh.subscribe("thesis_recognition/object_metadata", 1, callback_object_metadata);
+  ros::Subscriber object_meta_subscriber = nh.subscribe("thesis_recognition/object_dimension", 1, callback_object_dimension);
   
   // We are going to inform subscribing nodes about changes
   update_publisher = nh_private.advertise<std_msgs::Empty>("updates", 10);

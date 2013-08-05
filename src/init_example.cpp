@@ -53,118 +53,124 @@ void create_markers(thesis::ObjectInstance object)
 {
   visualization_msgs::Marker object_marker;
   
-  if(debug)
-  {
-    ROS_INFO("Quaternion before normalization: (%f, %f, %f, %f).",
-             object.pose_stamped.pose.orientation.x,
-             object.pose_stamped.pose.orientation.y,
-             object.pose_stamped.pose.orientation.z,
-             object.pose_stamped.pose.orientation.w);
-  }
-  
-  normalize_quaternion_msg(object.pose_stamped.pose.orientation);
-  
-  if(debug)
-  {
-    ROS_INFO("Quaternion after normalization:  (%f, %f, %f, %f).",
-             object.pose_stamped.pose.orientation.x,
-             object.pose_stamped.pose.orientation.y,
-             object.pose_stamped.pose.orientation.z,
-             object.pose_stamped.pose.orientation.w);
-    std::cout << std::endl;
-  }
-  
-  //
-  if(isnan(object.pose_stamped.pose.orientation.w))
-  {
-    tf::quaternionTFToMsg(IDENTITY_QUATERNION, object.pose_stamped.pose.orientation);
-  }
-
   // Setup the values that are valid for all markers
   object_marker.ns              = "thesis_example";
   object_marker.action          = visualization_msgs::Marker::ADD;
   object_marker.header.frame_id = map_frame;
   object_marker.header.stamp    = ros::Time();
+  object_marker.pose            = object.pose_stamped.pose;
   object_marker.color.a         = 1.0;
   
-  // Arrow; x-axis
-  object_marker.id      = unique_marker_id++;
-  object_marker.type    = visualization_msgs::Marker::ARROW;
-  object_marker.pose    = object.pose_stamped.pose;
-  object_marker.scale.x = 0.2;
-  object_marker.scale.y = 0.02;
-  object_marker.scale.z = 0.02;
-  object_marker.color.r = 1.0;
-  object_marker.color.g = 0.0;
-  object_marker.color.b = 0.0;
-  markers.markers.push_back(object_marker);
-  
-  // Rotate object pose to represent the other axis
-  tf::Quaternion q;
-  tf::quaternionMsgToTF(object.pose_stamped.pose.orientation, q);
-  tf::Matrix3x3 matTemp(q);
-  double y,
-         p,
-         r;
-  matTemp.getRPY(r, p, y);
-  double y_ = y + M_PI / 2,
-         p_ = p - M_PI / 2;
-  
-  // Arrow; y-axis
-  object_marker.id               = unique_marker_id++;
-  object_marker.color.r          = 0.0;
-  object_marker.color.g          = 1.0;
-  object_marker.color.b          = 0.0;
-  object_marker.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(r, p, y_);
-  markers.markers.push_back(object_marker);
-  
-  // Arrow; z-axis
-  object_marker.id               = unique_marker_id++;
-  object_marker.color.r          = 0.0;
-  object_marker.color.g          = 0.0;
-  object_marker.color.b          = 1.0;
-  object_marker.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(r, p_, y);
-  markers.markers.push_back(object_marker);
-  
-  //
+  // Check if orientation is valid
+  if(!isnan(object_marker.pose.orientation))
+  {
+    normalize_quaternion_msg(object_marker.pose.orientation);
+    
+    // Arrow; x-axis
+    object_marker.id      = unique_marker_id++;
+    object_marker.type    = visualization_msgs::Marker::ARROW;
+    object_marker.pose    = object.pose_stamped.pose;
+    object_marker.scale.x = 0.2;
+    object_marker.scale.y = 0.02;
+    object_marker.scale.z = 0.02;
+    object_marker.color.r = 1.0;
+    object_marker.color.g = 0.0;
+    object_marker.color.b = 0.0;
+    markers.markers.push_back(object_marker);
+    
+    // Rotate object pose to represent the other axis
+    tf::Quaternion q;
+    tf::quaternionMsgToTF(object.pose_stamped.pose.orientation, q);
+    tf::Matrix3x3 matTemp(q);
+    double y, p, r;
+    matTemp.getRPY(r, p, y);
+    double y_ = y + M_PI / 2,
+           p_ = p - M_PI / 2;
+    
+    // Arrow; y-axis
+    object_marker.id               = unique_marker_id++;
+    object_marker.color.r          = 0.0;
+    object_marker.color.g          = 1.0;
+    object_marker.color.b          = 0.0;
+    object_marker.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(r, p, y_);
+    markers.markers.push_back(object_marker);
+    
+    // Arrow; z-axis
+    object_marker.id               = unique_marker_id++;
+    object_marker.color.r          = 0.0;
+    object_marker.color.g          = 0.0;
+    object_marker.color.b          = 1.0;
+    object_marker.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(r, p_, y);
+    markers.markers.push_back(object_marker);
+  }
+  else
+  {
+    tf::quaternionTFToMsg(IDENTITY_QUATERNION, object_marker.pose.orientation);
+  }
+
+  // Get dimensions from the database
   thesis::DatabaseGetByID db_get_by_type_service;
   db_get_by_type_service.request.id = object.type_id;
   if(db_get_by_type_client.call(db_get_by_type_service))
   {
     double w = db_get_by_type_service.response.object_class.width,
            h = db_get_by_type_service.response.object_class.height;
-    //
-    if(isnan(w) || (w == 0.0))
+    // Check if we got valid dimensions from the database
+    if(!isnan(w) && (w != 0.0) && !isnan(h) && (h != 0.0))
     {
-      w = 0.01;
+      // Attributes of both box and sphere
+      object_marker.pose    = object.pose_stamped.pose;
+      object_marker.id      = unique_marker_id++;
+      object_marker.color.r = 0.0;
+      object_marker.color.g = 1.0;
+      object_marker.color.b = 0.0;
+      // Attributes for either box or sphere
+      if(!isnan(object.pose_stamped.pose.orientation))
+      {
+        // Box; representing a 3D render of the object
+        object_marker.type    = visualization_msgs::Marker::CUBE;
+        object_marker.scale.x = w;
+        object_marker.scale.y = h;
+        object_marker.scale.z = 0.01;
+      }
+      else
+      {
+        // Use radius instead width and height for markers without orientation
+        double r = (w + h) / 2.0;
+        // Use default values for orientation to avoid rviz errors
+        tf::quaternionTFToMsg(IDENTITY_QUATERNION, object_marker.pose.orientation);
+        // Sphere; representing a 3D of the object without orientation
+        object_marker.type    = visualization_msgs::Marker::SPHERE;
+        object_marker.scale.x = r;
+        object_marker.scale.y = r;
+        object_marker.scale.z = r;
+      }
+      // Add box or sphere
+      markers.markers.push_back(object_marker);
     }
-    if(isnan(h) || (h == 0.0))
+    else
     {
-      h = 0.01;
+      if(debug)
+      {
+        ROS_WARN("Visualisation: ");
+        ROS_WARN("  Got bad dimensions from 'thesis_database/get_by_type'.");
+        ROS_WARN("  Visualize only axes, not 3D render of the object.");
+      }
     }
-    // Box; representing a 3D render of the object
-    object_marker.id      = unique_marker_id++;
-    object_marker.type    = visualization_msgs::Marker::CUBE;
-    object_marker.pose    = object.pose_stamped.pose;
-    object_marker.scale.x = w;
-    object_marker.scale.y = h;
-    object_marker.scale.z = 0.01;
-    object_marker.color.r = 0.0;
-    object_marker.color.g = 1.0;
-    object_marker.color.b = 0.0;
-    markers.markers.push_back(object_marker);
   }
   else
   {
-    ROS_WARN("Visualisation: ");
-    ROS_WARN("  Failed to call service 'thesis_database/get_by_type'.");
-    ROS_WARN("  Visualize only axes, not 3D render of the object.");
+    if(debug)
+    {
+      ROS_WARN("Visualisation: ");
+      ROS_WARN("  Failed to call service 'thesis_database/get_by_type'.");
+      ROS_WARN("  Visualize only axes, not 3D render of the object.");
+    }
   }
   
   // Text; identifies the objects type (since we can't use textures)
   object_marker.id      = unique_marker_id++;
   object_marker.type    = visualization_msgs::Marker::TEXT_VIEW_FACING;
-  object_marker.pose    = object.pose_stamped.pose;
   object_marker.scale.z = 0.1;
   object_marker.color.r = 1.0;
   object_marker.color.g = 1.0;

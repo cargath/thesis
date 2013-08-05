@@ -191,10 +191,6 @@ inline geometry_msgs::Quaternion quaternion_from_plane(cv::Point3f w, cv::Point3
   // Normalize surface normal
   cv::Point3f n = norm3f(c);
   ROS_INFO("n:   (%f, %f, %f)", n.x, n.y, n.z);
-  // If the camera successfully recognizes an object,
-  // the object obviously faces the camera
-  n.z = fabs(n.z);
-  ROS_INFO("abs: (%f, %f, %f)", n.x, n.y, n.z);
   // Convert direction vector (surface normal) to Euler angles
   cv::Point3f ypr = xyz2ypr(n);
   ROS_INFO("ypr: (%f, %f, %f)", ypr.x, ypr.y, ypr.z);
@@ -246,6 +242,7 @@ inline void publish_object(const Finding& finding,
   ros::Time current_time = ros::Time::now();
   // Fill camera pose
   msg_camera_pose.type_id                       = finding.type_id;
+  msg_camera_pose.confidence                    = finding.confidence;
   msg_camera_pose.pose_stamped.header.stamp     = current_time;
   msg_camera_pose.pose_stamped.header.frame_id  = camera_frame;
   msg_camera_pose.pose_stamped.pose.position.x  = 0;
@@ -254,9 +251,11 @@ inline void publish_object(const Finding& finding,
   msg_camera_pose.pose_stamped.pose.orientation = YPR_CAMERA_MSG;
   // Fill object pose
   msg_object_pose.type_id                   = finding.type_id;
+  msg_object_pose.confidence                = finding.confidence;
   msg_object_pose.pose_stamped.header.stamp = current_time;
   // Fill object metadata
-  msg_object_meta.type_id = finding.type_id;
+  msg_object_meta.type_id    = finding.type_id;
+  msg_object_meta.confidence = finding.confidence;
   // Get object points in camera coordinate space
   std::vector<cv::Point3f> camera_coordinates,
                            good_camera_coordinates;
@@ -303,23 +302,23 @@ inline void publish_object(const Finding& finding,
   cv::Point3f w, h;
   if(!isnan(camera_coordinates[0]) && !isnan(camera_coordinates[1]) && !isnan(camera_coordinates[3]))
   {
-    w = camera_coordinates[1] - camera_coordinates[0],
+    w = camera_coordinates[1] - camera_coordinates[0];
     h = camera_coordinates[3] - camera_coordinates[0];
   }
   else if(!isnan(camera_coordinates[1]) && !isnan(camera_coordinates[2]) && !isnan(camera_coordinates[0]))
   {
-    h = camera_coordinates[2] - camera_coordinates[1],
-    w = camera_coordinates[0] - camera_coordinates[1];
+    w = camera_coordinates[1] - camera_coordinates[0];
+    h = camera_coordinates[2] - camera_coordinates[1];
   }
   else if(!isnan(camera_coordinates[2]) && !isnan(camera_coordinates[3]) && !isnan(camera_coordinates[1]))
   {
-    w = camera_coordinates[3] - camera_coordinates[2],
-    h = camera_coordinates[1] - camera_coordinates[2];
+    w = camera_coordinates[2] - camera_coordinates[3];
+    h = camera_coordinates[2] - camera_coordinates[1];
   }
   else if(!isnan(camera_coordinates[3]) && !isnan(camera_coordinates[0]) && !isnan(camera_coordinates[2]))
   {
-    h = camera_coordinates[0] - camera_coordinates[3],
     w = camera_coordinates[2] - camera_coordinates[3];
+    h = camera_coordinates[3] - camera_coordinates[0];
   }
   else
   {
@@ -327,9 +326,9 @@ inline void publish_object(const Finding& finding,
     h = cv::Point3f(NAN, NAN, NAN);
   }
   // Get object orientation & dimensions in camera coordinate space
-  if(!(isnan(w) || isnan(h)))
+  if(!isnan(w) && !isnan(h))
   {
-    ROS_INFO("Perception: !(isnan(w) || isnan(h)) == true");
+    ROS_INFO("Perception: !isnan(w) && !isnan(h) == true");
     // Compute object orientation
     msg_object_pose.pose_stamped.pose.orientation = quaternion_from_plane(w, h);
     // Compute object dimensions
@@ -338,7 +337,7 @@ inline void publish_object(const Finding& finding,
   }
   else
   {
-    ROS_INFO("Perception: !(isnan(w) || isnan(h)) == false");
+    ROS_INFO("Perception: !isnan(w) && !isnan(h) == false");
     // Fill object pose message
     msg_object_pose.pose_stamped.pose.orientation.x = NAN;
     msg_object_pose.pose_stamped.pose.orientation.y = NAN;
@@ -363,7 +362,7 @@ inline void recognize(const std::string& sample_id,
                       cv::Mat& debug_image)
 {
   std::vector<cv::Point2f> object_points;
-  double confidence;
+  double confidence = 0.0;
   // Search for an object until we don't find any more occurrences
   for(unsigned int loops = 0; loops <= max_loops; loops++)
   {
@@ -730,7 +729,7 @@ int main(int argc, char** argv)
   // Publish recognized objects
   object_pose_publisher = nh_private.advertise<thesis::ObjectInstance>("object_pose", 1000);
   camera_pose_publisher = nh_private.advertise<thesis::ObjectInstance>("camera_pose", 1000);
-  object_meta_publisher = nh_private.advertise<thesis::ObjectClass>("object_metadata", 1000);
+  object_meta_publisher = nh_private.advertise<thesis::ObjectClass>("object_dimension", 1000);
   
   // Spin
   ros::spin();

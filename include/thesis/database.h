@@ -54,6 +54,11 @@ class Database
     std::vector<thesis::ObjectClass> getAll();
     
     /**
+     *
+     */
+    bool update(const thesis::ObjectClass& input);
+    
+    /**
      * Add an OpenCV image to the database.
      *
      * @return true, if the image was added successfully,

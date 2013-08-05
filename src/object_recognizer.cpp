@@ -241,10 +241,10 @@ bool ObjectRecognizer::recognize(ImageInfo& sample_info,
     }
     // Compute ratio of matched keypoints
     #ifdef  USE_SIFT_GPU
-      confidence = matches_filtered.size() / sample_info.descriptors.size();
+      confidence = (float) matches_filtered.size() / (float) sample_info.descriptors.size();
     #endif
     #ifndef USE_SIFT_GPU
-      confidence = matches_filtered.size() / sample_info.descriptors.rows;
+      confidence = (float) matches_filtered.size() / (float) sample_info.descriptors.rows;
     #endif
     // Success
     return true;

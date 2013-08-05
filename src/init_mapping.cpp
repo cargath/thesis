@@ -29,9 +29,11 @@ using namespace geometry_msgs;
 std::string camera_frame,
             map_frame;
 
-double      tf_timeout;
+double      tf_timeout,
+            age_threshold;
 
-int         memory_size;
+int         memory_size,
+            min_confirmations;
 
 bool        debug;
 
@@ -43,6 +45,9 @@ ros::ServiceClient db_get_by_type_client;
 
 // The actual semantic map, storing recognized objects with map coordinates
 SemanticMap semantic_map;
+
+// Time since last cleanup
+ros::Time last_cleanup;
 
 void camera_2_map(const PoseStamped& pose_camera, PoseStamped& pose_map)
 {
@@ -82,9 +87,16 @@ cv::Point3f get_current_camera_position()
 
 void object_callback(const thesis::ObjectInstance::ConstPtr& input)
 {
+  // Attempt cleanup if delay is up
+  if((ros::Time::now() - last_cleanup).toSec() > age_threshold)
+  {
+    semantic_map.cleanup(age_threshold, (int) min_confirmations);
+    last_cleanup = ros::Time::now();
+  }
   // 
   thesis::ObjectInstance transformed;
-  transformed.type_id = input->type_id;
+  transformed.type_id    = input->type_id;
+  transformed.confidence = input->confidence;
   // If available, transform recognized object pose to map frame
   if(!isnan(input->pose_stamped.pose.position))
   {
@@ -96,12 +108,12 @@ void object_callback(const thesis::ObjectInstance::ConstPtr& input)
     {
       ROS_INFO("Mapping: Object caught: %s.", input->type_id.c_str());
       
-      ROS_INFO("  Object      position:    (%f, %f, %f).",
+      ROS_INFO("  Object position:         (%f, %f, %f).",
                input->pose_stamped.pose.position.x,
                input->pose_stamped.pose.position.y,
                input->pose_stamped.pose.position.z);
                
-      ROS_INFO("  Object      orientation: (%f, %f, %f, %f).",
+      ROS_INFO("  Object orientation:      (%f, %f, %f, %f).",
                input->pose_stamped.pose.orientation.x,
                input->pose_stamped.pose.orientation.y,
                input->pose_stamped.pose.orientation.z,
@@ -120,27 +132,42 @@ void object_callback(const thesis::ObjectInstance::ConstPtr& input)
 
       std::cout << std::endl;
     }
-  }
-  // Try adding transformed object to map
-  thesis::DatabaseGetByID db_get_by_type_service;
-  db_get_by_type_service.request.id = input->type_id;
-  if(db_get_by_type_client.call(db_get_by_type_service))
-  {
-    // Compute min distance
-    // the object needs to have to existing objects of the same type
-    // in order to be considered a new object
-    float min_distance = (db_get_by_type_service.response.object_class.width
-                       +  db_get_by_type_service.response.object_class.height) / 2;
-    // Add object to semantic map
-    semantic_map.add(transformed, min_distance);
-  }
-  else
-  {
-    // Still add object to map
-    semantic_map.add(transformed);
-    // Error
-    ROS_WARN("Mapping: Failed to call service 'thesis_database/get_by_type'.");
-    return;
+    
+    // Try adding transformed object to map
+    thesis::DatabaseGetByID db_get_by_type_service;
+    db_get_by_type_service.request.id = input->type_id;
+    if(db_get_by_type_client.call(db_get_by_type_service))
+    {
+      // Compute min distance
+      // the object needs to have to existing objects of the same type
+      // in order to be considered a new object
+      float min_distance = (db_get_by_type_service.response.object_class.width
+                         +  db_get_by_type_service.response.object_class.height) / 2.0f;
+      //
+      if(isnan(min_distance))
+      {
+        min_distance = 0.0f;
+      }
+      //
+      if(debug)
+      {
+        ROS_INFO("Mapping: min_distance: %f.", min_distance);
+      }
+      if(min_distance < 0.5f)
+      {
+        min_distance = 0.5f;
+      }
+      // Add object to semantic map
+      semantic_map.add(transformed, min_distance);
+    }
+    else
+    {
+      // Still add object to map
+      semantic_map.add(transformed);
+      // Error
+      ROS_WARN("Mapping: Failed to call service 'thesis_database/get_by_type'.");
+      return;
+    }
   }
 }
 
@@ -192,15 +219,20 @@ int main(int argc, char** argv)
   ROS_INFO("  Memory size:  %i.", memory_size);
   std::cout << std::endl;
   
-  //
-  semantic_map = SemanticMap(memory_size);
-  
   // Get local parameters
-  nh_private.param("debug", debug, false);
+  nh_private.param("debug",             debug,             false);
+  nh_private.param("age_threshold",     age_threshold,     1.0);
+  nh_private.param("min_confirmations", min_confirmations, 0);
   
   ROS_INFO("Mapping (local parameters): ");
-  ROS_INFO("  Debug mode: %s.", debug ? "true" : "false");
+  ROS_INFO("  Debug mode:        %s.", debug ? "true" : "false");
+  ROS_INFO("  Age threshold:     %f.", age_threshold);
+  ROS_INFO("  Min confirmations: %i.", min_confirmations);
   std::cout << std::endl;
+  
+  // Initialize semantic map
+  semantic_map = SemanticMap(memory_size, debug);
+  last_cleanup = ros::Time::now();
   
   // Create transform listener
   transform_listener = new tf::TransformListener();
@@ -208,7 +240,7 @@ int main(int argc, char** argv)
   ros::service::waitForService("thesis_database/get_by_type", -1);
   db_get_by_type_client = nh.serviceClient<thesis::DatabaseGetByID>("thesis_database/get_by_type");
   // Subscribe to relevant topics
-  ros::Subscriber object_subscriber = nh.subscribe("thesis_recognition/objects", 1, object_callback);
+  ros::Subscriber object_subscriber = nh.subscribe("thesis_recognition/object_pose", 1, object_callback);
   // Advertise services
   ros::ServiceServer srv_all         = nh_private.advertiseService("all", get_all);
   ros::ServiceServer srv_by_type     = nh_private.advertiseService("by_type", get_by_type);

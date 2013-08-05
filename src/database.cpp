@@ -55,6 +55,28 @@ bool Database::exists(std::string id)
   return true;
 }
 
+bool Database::update(const thesis::ObjectClass& input)
+{
+  if(exists(input.type_id))
+  {
+    if(!isnan(input.width) && !isnan(input.height))
+    {
+      database[input.type_id].values.add(input);
+      return true;
+    }
+    else
+    {
+      ROS_WARN("Database: Do not add NaN values for '%s' to database.", input.type_id.c_str());
+      return false;
+    }
+  }
+  else
+  {
+    ROS_WARN("Database: No object '%s' found to update.", input.type_id.c_str());
+    return false;
+  }
+}
+
 bool Database::getByID(std::string id, thesis::ObjectClass& out)
 {
   if(exists(id))
@@ -62,7 +84,7 @@ bool Database::getByID(std::string id, thesis::ObjectClass& out)
     // Get entry
     Entry e = database[id];
     // Get average values
-    out         = e.values.combined();
+    out = e.values.combined();
     // Add "static" values
     out.type_id = id;
     out.image   = e.image;
@@ -175,24 +197,24 @@ bool Database::add_image
       max_image_size.height
     );
     ROS_INFO("  Resizing it to %i x %i.", re_size.width, re_size.height);
-    std::cout << std::endl;
     cv::resize(image, image_resized, re_size);
   }
   else
   {
     image_resized = image;
   }
-  // Create empty database entry
-  Entry entry;
-  entry.values = ObjectQueue(memory_size);
+  // We already made sure an entry for this type doesn't already exist (see above):
+  // Trying to access an entry that not exists will initialize an empty entry.
+  Entry* entry = &database[name];
+  // Initialize ObjectQueue of the newly created entry to actually hold values
+  entry->values = ObjectQueue(memory_size);
   // Convert OpenCV image to ROS image message
   cv_bridge::CvImage cv_image;
   cv_image.encoding = sensor_msgs::image_encodings::MONO8;
   cv_image.image = image_resized;
-  cv_image.toImageMsg(entry.image);
-  // Add sample to database
-  database[name] = entry;
+  cv_image.toImageMsg(entry->image);
   // Success
+  std::cout << std::endl;
   return true;
 }
 

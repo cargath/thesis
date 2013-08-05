@@ -18,7 +18,7 @@ class SemanticMap
     /**
      * Constructor.
      */
-    SemanticMap(const int memory_size=0) : memory_size(memory_size)
+    SemanticMap(const int memory_size=0, const bool debug=true) : memory_size(memory_size), debug(debug)
     {
       // Starting position
       currentPosition.x = 0;
@@ -46,6 +46,11 @@ class SemanticMap
      */
     void setCurrentPosition(cv::Point3f p);
     
+    /**
+     * Attempt to merge duplicates and remove false positives.
+     */
+    void cleanup(double age_threshold, unsigned int min_confirmations);
+    
     // Getters
     void getAll(std::vector<thesis::ObjectInstance>& out);
     
@@ -63,7 +68,7 @@ class SemanticMap
     
     
     // Add object to this maps storage
-    void add(thesis::ObjectInstance& object, float min_distance=0.0f);
+    void add(const thesis::ObjectInstance& object, float min_distance=0.0f);
   
   protected:
     class ObjectQueue
@@ -74,7 +79,9 @@ class SemanticMap
          */
         ObjectQueue(const int memory_size=0) : memory_size(memory_size)
         {
-          //
+          // Remember time of initialization
+          stamp = ros::Time::now();
+          // For debugging purposes
           ROS_INFO("SemanticMap::ObjectQueue(%i);", memory_size);
         };
         
@@ -87,6 +94,16 @@ class SemanticMap
         };
         
         /**
+         * @return Time since initialization in seconds.
+         */
+        double age();
+        
+        /**
+         * @return Number of instances currently stored in this queue.
+         */
+        size_t size();
+        
+        /**
          * @return Weighted average of all values contained in this queue.
          */
         thesis::ObjectInstance combined();
@@ -94,7 +111,7 @@ class SemanticMap
         /**
          * @param Add object and remove oldest entry (if exceeding max size).
          */
-        void add(thesis::ObjectInstance& o);
+        void add(thesis::ObjectInstance o);
         
       protected:
         /**
@@ -106,6 +123,11 @@ class SemanticMap
          * Maximum number of values to store for averaging.
          */
         int memory_size;
+        
+        /**
+         * Time of initialization.
+         */
+        ros::Time stamp;
     };
 
     struct EvaluationComparator
@@ -156,6 +178,11 @@ class SemanticMap
      *
      */
     cv::Point3f currentPosition;
+    
+    /**
+     *
+     */
+    bool debug;
 };
 
 #endif //__SEMANTIC_MAP__
