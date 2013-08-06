@@ -49,10 +49,17 @@ class SemanticMap
     void setCurrentPosition(cv::Point3f p);
     
     /**
+     * Flag an object for removal.
+     */
+    void flag(const std::string& type,
+              const boost::uuids::uuid& id,
+              double age_threshold);
+    
+    /**
      * Attempt to merge duplicates and remove false positives.
      */
     void cleanup(double age_threshold, unsigned int min_confirmations);
-    
+
     // Getters
     void getAll(std::vector<thesis::ObjectInstance>& out);
     
@@ -69,7 +76,11 @@ class SemanticMap
     
     
     
-    // Add object to this maps storage
+    /**
+     * @param Add this object to the storage of this map.
+     * @param Minimal distance to existing objects,
+     *        otherwise attempt an updating instead of adding.
+     */
     void add(const thesis::ObjectInstance& object, float min_distance=0.0f);
   
   protected:
@@ -84,7 +95,10 @@ class SemanticMap
           // Initialize UUID
           id = uuid_msgs::random();
           // Remember time of initialization
-          stamp = ros::Time::now();
+          stamp_init = ros::Time::now();
+          stamp_flag = stamp_init;
+          // Not yet flagged for removal
+          flags = 0;
           // For debugging purposes
           ROS_INFO("SemanticMap::ObjectQueue(%i);", memory_size);
         };
@@ -96,6 +110,11 @@ class SemanticMap
         {
           //
         };
+        
+        /**
+         * @return This objects UUID.
+         */
+        boost::uuids::uuid getID();
         
         /**
          * @return Time since initialization in seconds.
@@ -117,6 +136,16 @@ class SemanticMap
          */
         void add(thesis::ObjectInstance o);
         
+        /**
+         * Flag for removal.
+         */
+        void flag(double age_threshold);
+        
+        /**
+         * @return Number of times this instance is flagged for removal.
+         */
+        unsigned int flagged();
+        
       protected:
         /**
          * Universally unique identifier.
@@ -134,9 +163,15 @@ class SemanticMap
         int memory_size;
         
         /**
+         * Counts how many times this instance was flagged for removal.
+         */
+        unsigned int flags;
+        
+        /**
          * Time of initialization.
          */
-        ros::Time stamp;
+        ros::Time stamp_init,
+                  stamp_flag;
     };
 
     struct EvaluationComparator

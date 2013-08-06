@@ -49,9 +49,14 @@ double SemanticMap::EvaluationComparator::evaluate
   return y;
 }
 
+boost::uuids::uuid SemanticMap::ObjectQueue::getID()
+{
+  return id;
+}
+
 double SemanticMap::ObjectQueue::age()
 {
-  return (ros::Time::now() - stamp).toSec();
+  return (ros::Time::now() - stamp_init).toSec();
 }
 
 size_t SemanticMap::ObjectQueue::size()
@@ -143,6 +148,24 @@ void SemanticMap::ObjectQueue::add(thesis::ObjectInstance o)
   }
 }
 
+void SemanticMap::ObjectQueue::flag(double age_threshold)
+{
+  if((ros::Time::now() - stamp_flag).toSec() < age_threshold)
+  {
+    flags++;
+  }
+  else
+  {
+    flags = 1;
+    stamp_flag = ros::Time::now();
+  }
+}
+
+unsigned int SemanticMap::ObjectQueue::flagged()
+{
+  return flags;
+}
+
 bool SemanticMap::exists(std::string id)
 {
   try
@@ -161,30 +184,63 @@ void SemanticMap::setCurrentPosition(cv::Point3f p)
   currentPosition = p;
 }
 
+void SemanticMap::flag
+(
+  const std::string& type,
+  const boost::uuids::uuid& id,
+  double age_threshold
+)
+{
+  if(exists(type))
+  {
+    std::vector<ObjectQueue>::iterator vec_iter = map[type].begin();
+    for(; vec_iter != map[type].end(); vec_iter++)
+    {
+      if(vec_iter->getID() == id)
+      {
+        vec_iter->flag(age_threshold);
+      }
+    }
+  }
+}
+
 void SemanticMap::cleanup(double age_threshold, unsigned int min_confirmations)
 {
-  if(debug)
-  {
-    ROS_INFO("SemanticMap::cleanup(%f, %i)", age_threshold, min_confirmations);
-  }
-  // TODO: Merge duplicates
-  
-  // Remove false positives
+  int removals = 0,
+      mergers  = 0;
+  // 'Garbage collection'
   std::map<std::string, std::vector<ObjectQueue> >::iterator map_iter = map.begin();
   for(; map_iter != map.end(); map_iter++)
   {
     std::vector<ObjectQueue>::iterator vec_iter = map_iter->second.begin();
     while(vec_iter != map_iter->second.end())
     {
-      if(vec_iter->age() > age_threshold && vec_iter->size() < min_confirmations)
+      // Recently flagged for removal
+      bool autoremove = vec_iter->flagged() >= min_confirmations,
+      // False positives
+           false_pos  = vec_iter->age() > age_threshold && vec_iter->size() < min_confirmations;
+      // Remove current object
+      if(autoremove || false_pos)
       {
+        removals++;
         vec_iter = map_iter->second.erase(vec_iter);
       }
+      // Don't remove current object
       else
       {
         vec_iter++;
       }
     }
+  }
+  // TODO: Merge duplicates
+  
+  // Debug output
+  if(debug)
+  {
+    ROS_INFO("SemanticMap::cleanup(%f, %i): ", age_threshold, min_confirmations);
+    ROS_INFO("  Removed %i objects.", removals);
+    ROS_INFO("  Merged  %i objects.", mergers);
+    std::cout << std::endl;
   }
 }
 
