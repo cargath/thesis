@@ -29,7 +29,7 @@ double SemanticMap::EvaluationComparator::evaluate
   // Confidence
   // - seen for how many consecutive frames
   // - ratio of matching keypoints on average
-  
+  double c = object.confidence;
   
   // Combined (weighted average)
   

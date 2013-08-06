@@ -138,32 +138,23 @@ void object_callback(const thesis::ObjectInstance::ConstPtr& input)
     db_get_by_type_service.request.id = input->type_id;
     if(db_get_by_type_client.call(db_get_by_type_service))
     {
-      // Compute min distance
-      // the object needs to have to existing objects of the same type
-      // in order to be considered a new object
-      float min_distance = (db_get_by_type_service.response.object_class.width
-                         +  db_get_by_type_service.response.object_class.height) / 2.0f;
-      //
-      if(isnan(min_distance))
+      // Compute min distance for object to be considered a new object
+      float min_distance = std::min(db_get_by_type_service.response.object_class.width,
+                                    db_get_by_type_service.response.object_class.height);
+      // Only add objects if we already know their dimensions
+      if(!isnan(min_distance) && min_distance > 0.0f)
       {
-        min_distance = 0.0f;
+        // Add object to semantic map
+        semantic_map.add(transformed, min_distance);
       }
-      //
+      // Debug output
       if(debug)
       {
         ROS_INFO("Mapping: min_distance: %f.", min_distance);
       }
-      if(min_distance < 0.5f)
-      {
-        min_distance = 0.5f;
-      }
-      // Add object to semantic map
-      semantic_map.add(transformed, min_distance);
     }
     else
     {
-      // Still add object to map
-      semantic_map.add(transformed);
       // Error
       ROS_WARN("Mapping: Failed to call service 'thesis_database/get_by_type'.");
       return;
