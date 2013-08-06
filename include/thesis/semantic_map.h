@@ -10,6 +10,8 @@
 
 #include <tf/tf.h>
 
+#include <thesis/uuid.h>
+
 #include <deque>
 
 class SemanticMap
@@ -79,6 +81,8 @@ class SemanticMap
          */
         ObjectQueue(const int memory_size=0) : memory_size(memory_size)
         {
+          // Initialize UUID
+          id = uuid_msgs::random();
           // Remember time of initialization
           stamp = ros::Time::now();
           // For debugging purposes
@@ -114,6 +118,11 @@ class SemanticMap
         void add(thesis::ObjectInstance o);
         
       protected:
+        /**
+         * Universally unique identifier.
+         */
+        boost::uuids::uuid id;
+      
         /**
          * Using a std::deque as a base to expand upon.
          */
