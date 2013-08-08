@@ -14,6 +14,7 @@
 
 // We want to subscribe to messages of this types
 #include <thesis/ObjectInstance.h>
+#include <thesis/ObjectInstanceArray.h>
 
 // We want to call these services
 #include <thesis/DatabaseGetByID.h>
@@ -22,6 +23,7 @@
 #include <thesis/MappingGetAll.h>
 #include <thesis/MappingGetByID.h>
 #include <thesis/MappingGetByPosition.h>
+#include <thesis/MappingGetVisible.h>
 
 using namespace geometry_msgs;
 
@@ -30,10 +32,14 @@ std::string camera_frame,
             map_frame;
 
 double      tf_timeout,
-            age_threshold;
+            age_threshold,
+            fov_near,
+            fov_far;
 
 int         memory_size,
-            min_confirmations;
+            min_confirmations,
+            fov_width,
+            fov_height;
 
 bool        debug;
 
@@ -48,6 +54,20 @@ SemanticMap semantic_map;
 
 // Time since last cleanup
 ros::Time last_cleanup;
+
+void map_2_camera(const PoseStamped& pose_map, PoseStamped& pose_camera)
+{
+  // Make sure transformation exists at this point in time
+  transform_listener->waitForTransform(
+    map_frame,
+    camera_frame,
+    pose_map.header.stamp,
+    ros::Duration(tf_timeout)
+  );
+  // Transform recognized camera pose to map frame
+  transform_listener->transformPose(camera_frame, pose_map, pose_camera);
+  pose_camera.header.stamp = ros::Time::now();
+}
 
 void camera_2_map(const PoseStamped& pose_camera, PoseStamped& pose_map)
 {
@@ -77,15 +97,115 @@ cv::Point3f get_current_camera_position()
   geometry_msgs::PoseStamped pose_map;
   camera_2_map(pose_camera, pose_map);
   //
-  cv::Point3f p;
-  p.x = pose_map.pose.position.x;
-  p.y = pose_map.pose.position.y;
-  p.z = pose_map.pose.position.z;
-  //
-  return p;
+  return ros2cv3f(pose_map.pose.position);
 }
 
-void object_callback(const thesis::ObjectInstance::ConstPtr& input)
+inline bool is_visible(geometry_msgs::Point p)
+{
+  // Calculate angles between point and camera direction
+  float angle_width  = angle3f(cv::Point3f(p.x,  0.0f, p.z), cv::Point3f(0.0f, 0.0f, 1.0f)),
+        angle_heigth = angle3f(cv::Point3f(0.0f, p.y,  p.z), cv::Point3f(0.0f, 0.0f, 1.0f));
+  // Check if point is inside camera frustum
+  return (angle_width <= fov_width && angle_heigth <= fov_height && p.z >= fov_near && p.z <= fov_far);
+}
+
+inline float get_shorter_side(std::string type)
+{
+  thesis::DatabaseGetByID db_get_by_type_service;
+  db_get_by_type_service.request.id = type;
+  if(db_get_by_type_client.call(db_get_by_type_service))
+  {
+    // Get dimensions
+    float width  = db_get_by_type_service.response.object_class.width,
+          height = db_get_by_type_service.response.object_class.height;
+    // Return shorter side
+    return std::min(width, height);
+  }
+  else
+  {
+    // Error
+    ROS_WARN("Mapping::get_shorter_side(%s): ", type.c_str());
+    ROS_WARN("  Failed to call service 'thesis_database/get_by_type'.");
+    std::cout << std::endl;
+    return NAN;
+  }
+}
+
+inline void get_currently_visible(std::vector<thesis::ObjectInstance>& visible)
+{
+  visible.clear();
+  // Get all objects
+  std::vector<thesis::ObjectInstance> all_objects;
+  semantic_map.setCurrentPosition(get_current_camera_position());
+  semantic_map.getAll(all_objects);
+  // Check which are currently visible
+  for(size_t i = 0; i < all_objects.size(); i++)
+  {
+    // Transform object pose to camera coordinates
+    // (which makes checking for visibility a lot easier)
+    geometry_msgs::PoseStamped pose_camera;
+    map_2_camera(all_objects[i].pose_stamped, pose_camera);
+    // Check if object is currently visible
+    if(is_visible(pose_camera.pose.position))
+    {
+      visible.push_back(all_objects[i]);
+    }
+  }
+}
+
+boost::uuids::uuid* object_callback(const thesis::ObjectInstance& input)
+{
+  // 
+  thesis::ObjectInstance transformed;
+  transformed.type_id    = input.type_id;
+  transformed.confidence = input.confidence;
+  // If available, transform recognized object pose to map frame
+  if(!isnan(input.pose_stamped.pose.position))
+  {
+    // Compute min distance for object to be considered a new object
+    float min_distance = get_shorter_side(input.type_id);
+    //
+    if(!isnan(min_distance) && min_distance > 0.0f)
+    {
+      // Debug output
+      if(debug)
+      {
+        ROS_INFO("Mapping::object_callback(%s): ", input.type_id.c_str());
+        ROS_INFO("  min_distance: %f.", min_distance);
+        std::cout << std::endl;
+      }
+      // Transform object to map space
+      camera_2_map(input.pose_stamped, transformed.pose_stamped);
+      // Add object to semantic map
+      return semantic_map.add(transformed, min_distance);
+    }
+    else
+    {
+      // Error
+      if(debug)
+      {
+        ROS_INFO("Mapping::object_callback(%s): ", input.type_id.c_str());
+        ROS_INFO("  Database does not know dimensions yet.");
+        ROS_INFO("  Don't add object to semantic map.");
+        std::cout << std::endl;
+      }
+      return NULL;
+    }
+  }
+  else
+  {
+    // Error
+    if(debug)
+    {
+      ROS_INFO("Mapping::object_callback(%s): ", input.type_id.c_str());
+      ROS_INFO("  Got bad object position values (at least one is NaN).");
+      std::cout << std::endl;
+    }
+    return NULL;
+  }
+}
+
+void object_array_callback(const thesis::ObjectInstanceArray::ConstPtr& input)
 {
   // Attempt cleanup if delay is up
   if((ros::Time::now() - last_cleanup).toSec() > age_threshold)
@@ -93,43 +213,41 @@ void object_callback(const thesis::ObjectInstance::ConstPtr& input)
     semantic_map.cleanup(age_threshold, (int) min_confirmations);
     last_cleanup = ros::Time::now();
   }
-  // 
-  thesis::ObjectInstance transformed;
-  transformed.type_id    = input->type_id;
-  transformed.confidence = input->confidence;
-  // If available, transform recognized object pose to map frame
-  if(!isnan(input->pose_stamped.pose.position))
+  // Get currently visible objects
+  std::vector<thesis::ObjectInstance> visible;
+  get_currently_visible(visible);
+  // Add objects to semantic map
+  for(size_t i = 0; i < input->array.size(); i++)
   {
-    // Transform object to map space
-    camera_2_map(input->pose_stamped, transformed.pose_stamped);
-    // Try adding transformed object to map
-    thesis::DatabaseGetByID db_get_by_type_service;
-    db_get_by_type_service.request.id = input->type_id;
-    if(db_get_by_type_client.call(db_get_by_type_service))
+    boost::uuids::uuid* id = object_callback(input->array[i]);
+    // NULL if an object was updated instead of adding a new one
+    if(id != NULL)
     {
-      // Compute min distance for object to be considered a new object
-      float min_distance = std::min(db_get_by_type_service.response.object_class.width,
-                                    db_get_by_type_service.response.object_class.height);
-      // Only add objects if we already know their dimensions
-      if(!isnan(min_distance) && min_distance > 0.0f)
+      // Remove updated objects from currently visible objects
+      std::vector<thesis::ObjectInstance>::iterator vec_iter = visible.begin();
+      while(vec_iter != visible.end())
       {
-        // Add object to semantic map
-        semantic_map.add(transformed, min_distance);
-      }
-      // Debug output
-      if(debug)
-      {
-        ROS_INFO("Mapping: min_distance: %f.", min_distance);
-        std::cout << std::endl;
+        if(uuid_msgs::fromMsg(vec_iter->uuid) == *id)
+        {
+          vec_iter = visible.erase(vec_iter);
+          // We shouldn't find an object with the same UUID again
+          break;
+        }
+        else
+        {
+          vec_iter++;
+        }
       }
     }
-    else
-    {
-      // Error
-      ROS_WARN("Mapping: Failed to call service 'thesis_database/get_by_type'.");
-      std::cout << std::endl;
-      return;
-    }
+  }
+  // Flag not updated visible objects for removal
+  for(size_t i = 0; i < visible.size(); i++)
+  {
+    semantic_map.flag(
+      visible[i].type_id,
+      uuid_msgs::fromMsg(visible[i].uuid),
+      age_threshold
+    );
   }
 }
 
@@ -152,12 +270,19 @@ bool get_by_type(thesis::MappingGetByID::Request& request,
 bool get_by_position(thesis::MappingGetByPosition::Request& request,
                      thesis::MappingGetByPosition::Response& result)
 {
-  cv::Point3f p;
-  p.x = request.position.x;
-  p.y = request.position.y;
-  p.z = request.position.z;
   semantic_map.setCurrentPosition(get_current_camera_position());
-  semantic_map.getByPosition(p, result.objects);
+  semantic_map.getByPosition(ros2cv3f(request.position), result.objects);
+  return true;
+}
+
+bool get_visible(thesis::MappingGetVisible::Request& request,
+                 thesis::MappingGetVisible::Response& result)
+{
+  // Just a fail-safe, get_currently_visible() should be doing this anyway
+  semantic_map.setCurrentPosition(get_current_camera_position());
+  // Get currently visible objects
+  get_currently_visible(result.objects);
+  // Success
   return true;
 }
 
@@ -185,11 +310,19 @@ int main(int argc, char** argv)
   nh_private.param("debug",             debug,             false);
   nh_private.param("age_threshold",     age_threshold,     1.0);
   nh_private.param("min_confirmations", min_confirmations, 0);
+  nh_private.param("fov_width",         fov_width,         90);
+  nh_private.param("fov_height",        fov_height,        90);
+  nh_private.param("fov_near",          fov_near,          0.0);
+  nh_private.param("fov_far",           fov_far,           5.0);
   
   ROS_INFO("Mapping (local parameters): ");
   ROS_INFO("  Debug mode:        %s.", debug ? "true" : "false");
   ROS_INFO("  Age threshold:     %f.", age_threshold);
   ROS_INFO("  Min confirmations: %i.", min_confirmations);
+  ROS_INFO("  FOV width:         %i.", fov_width);
+  ROS_INFO("  FOV height:        %i.", fov_height);
+  ROS_INFO("  FOV near:          %f.", fov_near);
+  ROS_INFO("  FOV far:           %f.", fov_far);
   std::cout << std::endl;
   
   // Create transform listener
@@ -198,12 +331,15 @@ int main(int argc, char** argv)
   // Initialize reusable service clients
   ros::service::waitForService("thesis_database/get_by_type", -1);
   db_get_by_type_client = nh.serviceClient<thesis::DatabaseGetByID>("thesis_database/get_by_type");
+  
   // Subscribe to relevant topics
-  ros::Subscriber object_subscriber = nh.subscribe("thesis_recognition/object_pose", 1, object_callback);
+  ros::Subscriber object_subscriber = nh.subscribe("thesis_recognition/object_pose", 1, object_array_callback);
+  
   // Advertise services
   ros::ServiceServer srv_all         = nh_private.advertiseService("all", get_all);
   ros::ServiceServer srv_by_type     = nh_private.advertiseService("by_type", get_by_type);
   ros::ServiceServer srv_by_position = nh_private.advertiseService("by_position", get_by_position);
+  ros::ServiceServer srv_visible     = nh_private.advertiseService("visible", get_visible);
   
   // Initialize semantic map
   semantic_map = SemanticMap(memory_size, debug);

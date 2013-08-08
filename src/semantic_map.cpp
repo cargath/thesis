@@ -19,10 +19,7 @@ double SemanticMap::EvaluationComparator::evaluate
   double t = (ros::Time::now() - object.pose_stamped.header.stamp).toSec();
   
   // Object position
-  cv::Point3f p_o;
-  p_o.x = object.pose_stamped.pose.position.x;
-  p_o.y = object.pose_stamped.pose.position.y;
-  p_o.z = object.pose_stamped.pose.position.z;
+  cv::Point3f p_o = ros2cv3f(object.pose_stamped.pose.position);
   // Distance
   double d = dist3f(p_c, p_o);
   
@@ -54,6 +51,11 @@ boost::uuids::uuid SemanticMap::ObjectQueue::getID()
   return id;
 }
 
+boost::uuids::uuid* SemanticMap::ObjectQueue::getIDPtr()
+{
+  return &id;
+}
+
 double SemanticMap::ObjectQueue::age()
 {
   return (ros::Time::now() - stamp_init).toSec();
@@ -70,7 +72,10 @@ thesis::ObjectInstance SemanticMap::ObjectQueue::combined()
   
   if(!deque.empty())
   {
-    o.type_id = deque.front().type_id;
+    // Values that apply to all instances in this queue
+    o.type_id             = deque.front().type_id;
+    o.uuid                = uuid_msgs::toMsg(id);
+    o.pose_stamped.header = deque.front().pose_stamped.header;
     
     double confidence_sum             = 0.0,
            orientation_confidence_sum = 0.0,
@@ -128,9 +133,12 @@ thesis::ObjectInstance SemanticMap::ObjectQueue::combined()
   }
   else
   {
+    // Debug output
     ROS_ERROR("SemanticMap::ObjectQueue::combined(): Called on empty queue.");
     std::cout << std::endl;
-    o.type_id = "";
+    // Fill message with empty values
+    o.type_id      = "";
+    o.uuid         = uuid_msgs::UniqueID();
     o.pose_stamped = geometry_msgs::PoseStamped();
   }
   
@@ -243,18 +251,15 @@ void SemanticMap::cleanup(double age_threshold, unsigned int min_confirmations)
   }
 }
 
-void SemanticMap::add(const thesis::ObjectInstance& object, float min_distance)
+boost::uuids::uuid* SemanticMap::add(const thesis::ObjectInstance& object, float min_distance)
 {
   //
-  cv::Point3f p;
-  p.x = object.pose_stamped.pose.position.x;
-  p.y = object.pose_stamped.pose.position.y;
-  p.z = object.pose_stamped.pose.position.z;
+  cv::Point3f p = ros2cv3f(object.pose_stamped.pose.position);
   //
   if(debug)
   {
     ROS_INFO("SemanticMap::add(%s, %f): ", object.type_id.c_str(), min_distance);
-    ROS_INFO("  At position: (%f, %f, %f).", p.x, p.y, p.z);
+    ROS_INFO("  Object position: (%f, %f, %f).", p.x, p.y, p.z);
   }
   // Check for already stored objects of the same type
   std::vector<std::vector<ObjectQueue>::iterator> existing_objects;
@@ -264,10 +269,7 @@ void SemanticMap::add(const thesis::ObjectInstance& object, float min_distance)
     for(; iter != map[object.type_id].end(); iter++)
     {
       thesis::ObjectInstance temp = iter->combined();
-      cv::Point3f p_;
-      p_.x = temp.pose_stamped.pose.position.x;
-      p_.y = temp.pose_stamped.pose.position.y;
-      p_.z = temp.pose_stamped.pose.position.z;
+      cv::Point3f p_ = ros2cv3f(temp.pose_stamped.pose.position);
       float dist = dist3f(p, p_);
       if(debug)
       {
@@ -295,6 +297,7 @@ void SemanticMap::add(const thesis::ObjectInstance& object, float min_distance)
         object.pose_stamped.pose.position.y,
         object.pose_stamped.pose.position.z
       );
+      std::cout << std::endl;
     }
     // ...look for the closest
     std::vector<ObjectQueue>::iterator closest;
@@ -302,10 +305,7 @@ void SemanticMap::add(const thesis::ObjectInstance& object, float min_distance)
     for(size_t i = 0; i < existing_objects.size(); i++)
     {
       thesis::ObjectInstance temp = existing_objects[i]->combined();
-      cv::Point3f p_;
-      p_.x = temp.pose_stamped.pose.position.x;
-      p_.y = temp.pose_stamped.pose.position.y;
-      p_.z = temp.pose_stamped.pose.position.z;
+      cv::Point3f p_ = ros2cv3f(temp.pose_stamped.pose.position);
       float current_distance = dist3f(p, p_);
       if(current_distance < closest_distance)
       {
@@ -315,6 +315,8 @@ void SemanticMap::add(const thesis::ObjectInstance& object, float min_distance)
     }
     // ...and update its entry
     closest->add(object);
+    // Return UUID of the updated object
+    return closest->getIDPtr();
   }
   // If one object of this type already exists at the same position...
   else if(existing_objects.size() == 1)
@@ -327,9 +329,12 @@ void SemanticMap::add(const thesis::ObjectInstance& object, float min_distance)
         object.pose_stamped.pose.position.y,
         object.pose_stamped.pose.position.z
       );
+      std::cout << std::endl;
     }
     // ...update the entry
     existing_objects.front()->add(object);
+    // Return UUID of the updated object
+    return existing_objects.front()->getIDPtr();
   }
   // If there isn't already an object of this type...
   else
@@ -342,14 +347,15 @@ void SemanticMap::add(const thesis::ObjectInstance& object, float min_distance)
         object.pose_stamped.pose.position.y,
         object.pose_stamped.pose.position.z
       );
+      std::cout << std::endl;
     }
     // ...create a new entry
     ObjectQueue entry = ObjectQueue(memory_size);
     entry.add(object);
     map[object.type_id].push_back(entry);
+    // Return 'NULL' if object was really added (not updated)
+    return NULL;
   }
-  //
-  std::cout << std::endl;
 }
 
 void SemanticMap::getAll(std::vector<thesis::ObjectInstance>& out)
@@ -398,10 +404,7 @@ void SemanticMap::getByIDAtPosition
   getByID(id, objects);
   for(size_t i = 0; i < objects.size(); i++)
   {
-    cv::Point3f p_;
-    p_.x = objects[i].pose_stamped.pose.position.x;
-    p_.y = objects[i].pose_stamped.pose.position.y;
-    p_.z = objects[i].pose_stamped.pose.position.z;
+    cv::Point3f p_ = ros2cv3f(objects[i].pose_stamped.pose.position);
     if(dist3f(p, p_) < max_distance)
     {
       out.push_back(objects[i]);
@@ -426,10 +429,7 @@ void SemanticMap::getByPosition
     for(size_t i = 0; i < it->second.size(); i++)
     {
       thesis::ObjectInstance current = it->second[i].combined();
-      cv::Point3f p_;
-      p_.x = current.pose_stamped.pose.position.x;
-      p_.y = current.pose_stamped.pose.position.y;
-      p_.z = current.pose_stamped.pose.position.z;
+      cv::Point3f p_ = ros2cv3f(current.pose_stamped.pose.position);
       if(dist3f(p, p_) <= max_distance)
       {
         out.push_back(current);

@@ -1,10 +1,10 @@
 /**
- * This file is based on the unique_identifier stack by Jack O'Quin.
- * My compiler couldn't find <unique_id/unique_id.h>,
- * so i recreated the required functionality.
- *
- * @author Carsten Könemann
- */
+* This file is based on the unique_identifier stack by Jack O'Quin.
+* My compiler couldn't find <unique_id/unique_id.h>,
+* so i recreated the required functionality.
+*
+* @author Carsten Könemann
+*/
 #ifndef __UUID__
 #define __UUID__
 

@@ -10,9 +10,6 @@
 #include <opencv2/opencv.hpp>
 #include <image_geometry/pinhole_camera_model.h>
 
-// We are working with TF
-#include <tf/transform_listener.h>
-
 // Local headers
 #include <thesis/math2d.h>
 #include <thesis/math3d.h>
@@ -31,17 +28,17 @@
 
 // We want to call these services
 #include <thesis/DatabaseGetAll.h>
-#include <thesis/MappingGetAll.h>
 
 // We are going to publish messages of this type
 #include <thesis/ObjectClass.h>
 #include <thesis/ObjectInstance.h>
+#include <thesis/ObjectClassArray.h>
+#include <thesis/ObjectInstanceArray.h>
 #include <tf/transform_datatypes.h>
 
 // FPS counter for debugging purposes
 #include <thesis/fps_calculator.h>
 
-using namespace geometry_msgs;
 using namespace sensor_msgs;
 using namespace message_filters;
 
@@ -59,22 +56,16 @@ static const cv::Point3f               YPR_CAMERA     = xyz2ypr(cv::Point3f(0.0f
 static const geometry_msgs::Quaternion YPR_CAMERA_MSG = tf::createQuaternionMsgFromRollPitchYaw(YPR_CAMERA.z, YPR_CAMERA.y, YPR_CAMERA.x);
 
 // Config parameters
-std::string camera_frame,
-            map_frame;
+std::string camera_frame;
 
 bool        debug;
 
 int         mipmap_level,
             max_objects_per_frame,
-            max_nof_keypoints,
-            fov_width,
-            fov_height;
+            max_nof_keypoints;
             
-double      tf_timeout,
-            openni_timeout,
-            knn_1to2_ratio,
-            fov_near,
-            fov_far;
+double      openni_timeout,
+            knn_1to2_ratio;
 
 // We try to get the image size of a connected OpenNI camera (if available)
 bool openni_once = false;
@@ -88,11 +79,7 @@ ros::Publisher object_pose_publisher,
                object_meta_publisher;
 
 // Reusable service clients
-ros::ServiceClient db_get_all_client,
-                   map_get_all_client;
-
-// Transform listener
-tf::TransformListener* transform_listener;
+ros::ServiceClient db_get_all_client;
 
 struct Finding
 {
@@ -565,62 +552,12 @@ void callback_mipmapping(const cv::Mat& camera_image,
   }
 }
 
-void map_2_camera(const PoseStamped& pose_map, PoseStamped& pose_camera)
-{
-  // Make sure transformation exists at this point in time
-  transform_listener->waitForTransform(
-    map_frame,
-    camera_frame,
-    pose_map.header.stamp,
-    ros::Duration(tf_timeout)
-  );
-  // Transform recognized camera pose to map frame
-  transform_listener->transformPose(camera_frame, pose_map, pose_camera);
-  pose_camera.header.stamp = ros::Time::now();
-}
-
-inline bool is_visible(geometry_msgs::Point p)
-{
-  // Calculate angles between point and camera direction
-  float angle_width  = angle3f(cv::Point3f(p.x,  0.0f, p.z), cv::Point3f(0.0f, 0.0f, 1.0f)),
-        angle_heigth = angle3f(cv::Point3f(0.0f, p.y,  p.z), cv::Point3f(0.0f, 0.0f, 1.0f));
-  // Check if point is inside camera frustum
-  return (angle_width <= fov_width && angle_heigth <= fov_height && p.z >= fov_near && p.z <= fov_far);
-}
-
 void callback_openni(const sensor_msgs::Image::ConstPtr& rgb_input,
                      const sensor_msgs::Image::ConstPtr& depth_input,
                      const sensor_msgs::CameraInfo::ConstPtr& cam_info_input)
 {
   // Update FPS calculator
   fps_calculator.update();
-  
-  // Compile a list of currently visible objects
-  std::vector<thesis::ObjectInstance> visible_objects;
-  // Get objects from semantic map
-  thesis::MappingGetAll map_get_all_service;
-  if(map_get_all_client.call(map_get_all_service))
-  {
-    // Check which objects should currently be visible
-    for(size_t i = 0; i < map_get_all_service.response.objects.size(); i++)
-    {
-      // Transform object pose to camera coordinates
-      thesis::ObjectInstance transformed = map_get_all_service.response.objects[i];
-      map_2_camera(map_get_all_service.response.objects[i].pose_stamped, transformed.pose_stamped);
-      // Check if object should currently be visible
-      if(is_visible(transformed.pose_stamped.pose.position))
-      {
-        visible_objects.push_back(transformed);
-      }
-    }
-  }
-  else
-  {
-    ROS_WARN("Perception::callback_openni(): ");
-    ROS_WARN("  Failed to call service 'thesis_mapping/all'.");
-    ROS_WARN("  Unable to check which objects should currently be visible.");
-    std::cout << std::endl;
-  }
   
   // Convert ROS image messages to OpenCV images
   cv_bridge::CvImagePtr cv_ptr_bgr8,
@@ -673,6 +610,9 @@ void callback_openni(const sensor_msgs::Image::ConstPtr& rgb_input,
     callback_simple(cv_ptr_mono8->image, cv_ptr_bgr8->image, findings);
   }
   // Publish objects
+  thesis::ObjectInstanceArray msgs_object_pose,
+                              msgs_camera_pose;
+  thesis::ObjectClassArray    msgs_object_meta;
   camera_model.fromCameraInfo(cam_info_input);
   for(size_t i = 0; i < findings.size(); i++)
   {
@@ -689,11 +629,15 @@ void callback_openni(const sensor_msgs::Image::ConstPtr& rgb_input,
       msg_camera_pose,
       msg_object_meta
     );
-    // Publish messages
-    object_pose_publisher.publish(msg_object_pose);
-    camera_pose_publisher.publish(msg_camera_pose);
-    object_meta_publisher.publish(msg_object_meta);
+    //
+    msgs_object_pose.array.push_back(msg_object_pose);
+    msgs_camera_pose.array.push_back(msg_camera_pose);
+    msgs_object_meta.array.push_back(msg_object_meta);
   }
+  // Publish messages
+  object_pose_publisher.publish(msgs_object_pose);
+  camera_pose_publisher.publish(msgs_camera_pose);
+  object_meta_publisher.publish(msgs_object_meta);
 }
 
 void callback_database_update(const std_msgs::Empty::ConstPtr& input)
@@ -724,8 +668,6 @@ int main(int argc, char** argv)
   nh.getParam("/thesis/depth_image_topic", depth_image_topic);
   nh.getParam("/thesis/camera_info_topic", camera_info_topic);
   nh.getParam("/thesis/camera_frame",      camera_frame);
-  nh.getParam("/thesis/map_frame",         map_frame);
-  nh.getParam("/thesis/tf_timeout",        tf_timeout);
   nh.getParam("/thesis/openni_timeout",    openni_timeout);
   
   ROS_INFO("Perception (global parameters): ");
@@ -733,8 +675,6 @@ int main(int argc, char** argv)
   ROS_INFO("  Depth image topic: %s.", depth_image_topic.c_str());
   ROS_INFO("  Camera info topic: %s.", camera_info_topic.c_str());
   ROS_INFO("  Camera frame:      %s.", camera_frame.c_str());
-  ROS_INFO("  Map frame:         %s.", map_frame.c_str());
-  ROS_INFO("  TF timeout:        %f.", tf_timeout);
   ROS_INFO("  OpenNI timeout:    %f.", openni_timeout);
   std::cout << std::endl;
   
@@ -744,10 +684,6 @@ int main(int argc, char** argv)
   nh_private.param("max_objects_per_frame", max_objects_per_frame, 1);
   nh_private.param("max_nof_keypoints",     max_nof_keypoints,     64);
   nh_private.param("knn_1to2_ratio",        knn_1to2_ratio,        0.9);
-  nh_private.param("fov_width",             fov_width,             90);
-  nh_private.param("fov_height",            fov_height,            90);
-  nh_private.param("fov_near",              fov_near,              0.0);
-  nh_private.param("fov_far",               fov_far,               5.0);
   
   ROS_INFO("Perception (local parameters): ");
   ROS_INFO("  Debug mode:                 %s.", debug ? "true" : "false");
@@ -755,10 +691,6 @@ int main(int argc, char** argv)
   ROS_INFO("  Max objects per frame:      %i.", max_objects_per_frame);
   ROS_INFO("  Max number of keypoints:    %i.", max_nof_keypoints);
   ROS_INFO("  kNN 1st to 2nd ratio:       %f.", knn_1to2_ratio);
-  ROS_INFO("  FOV (field of view) width:  %i.", fov_width);
-  ROS_INFO("  FOV (field of view) height: %i.", fov_height);
-  ROS_INFO("  FOV (field of view) near:   %f.", fov_near);
-  ROS_INFO("  FOV (field of view) far:    %f.", fov_far);
   std::cout << std::endl;
   
   // Create debug image windows
@@ -786,14 +718,9 @@ int main(int argc, char** argv)
   }
   camera_info_once_subscriber.shutdown();
   
-  // Create transform listener
-  transform_listener = new tf::TransformListener();
-  
   // Initialize reusable service clients
   ros::service::waitForService("thesis_database/get_all", -1);
   db_get_all_client = nh.serviceClient<thesis::DatabaseGetAll>("thesis_database/get_all");
-  ros::service::waitForService("thesis_mapping/all", -1);
-  map_get_all_client = nh.serviceClient<thesis::MappingGetAll>("thesis_mapping/all");
   
   // Create image database
   reset(mipmap_level);
@@ -821,9 +748,9 @@ int main(int argc, char** argv)
   );
   
   // Publish recognized objects
-  object_pose_publisher = nh_private.advertise<thesis::ObjectInstance>("object_pose", 1000);
-  camera_pose_publisher = nh_private.advertise<thesis::ObjectInstance>("camera_pose", 1000);
-  object_meta_publisher = nh_private.advertise<thesis::ObjectClass>("object_dimension", 1000);
+  object_pose_publisher = nh_private.advertise<thesis::ObjectInstanceArray>("object_pose", 1000);
+  camera_pose_publisher = nh_private.advertise<thesis::ObjectInstanceArray>("camera_pose", 1000);
+  object_meta_publisher = nh_private.advertise<thesis::ObjectClassArray>("object_dimension", 1000);
   
   // Spin
   ros::spin();
@@ -837,7 +764,6 @@ int main(int argc, char** argv)
       cv::destroyWindow(MIPMAP_DEBUG_IMAGE_WINDOW);
     }
   }
-  delete transform_listener;
   
   // Exit with success
   return 0;
