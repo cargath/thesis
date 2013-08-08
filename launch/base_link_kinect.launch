@@ -1,4 +1,0 @@
-<launch>
-  <!-- Camera coordinates, 30fps -->
-  <node pkg="tf" type="static_transform_publisher" name="base_link_kinect" args="0 0 0 0 0 0 /map /head_mount_kinect_rgb_optical_frame 33"/>
-</launch>

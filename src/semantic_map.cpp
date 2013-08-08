@@ -206,8 +206,7 @@ void SemanticMap::flag
 
 void SemanticMap::cleanup(double age_threshold, unsigned int min_confirmations)
 {
-  int removals = 0,
-      mergers  = 0;
+  int removals = 0;
   // 'Garbage collection'
   std::map<std::string, std::vector<ObjectQueue> >::iterator map_iter = map.begin();
   for(; map_iter != map.end(); map_iter++)
@@ -232,14 +231,14 @@ void SemanticMap::cleanup(double age_threshold, unsigned int min_confirmations)
       }
     }
   }
-  // TODO: Merge duplicates
-  
   // Debug output
   if(debug)
   {
-    ROS_INFO("SemanticMap::cleanup(%f, %i): ", age_threshold, min_confirmations);
-    ROS_INFO("  Removed %i objects.", removals);
-    ROS_INFO("  Merged  %i objects.", mergers);
+    ROS_INFO("SemanticMap::cleanup(%f, %i): Removed %i objects.",
+      age_threshold,
+      min_confirmations,
+      removals
+    );
     std::cout << std::endl;
   }
 }

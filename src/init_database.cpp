@@ -93,7 +93,7 @@ bool callback_add_files(thesis::DatabaseAddFile::Request& request,
       }
       else
       {
-        ROS_INFO("Add file service:");
+        ROS_INFO("Database::callback_add_files(): ");
         ROS_INFO("  Image name is empty. Using filename ('%s') instead.", filename.c_str());
         database.add_image(image, filename, min_image_size, max_image_size);
       }
@@ -157,7 +157,8 @@ void callback_object_dimension(const thesis::ObjectClass::ConstPtr& input)
   {
     if(debug)
     {
-      ROS_WARN("Database: Unable to update values for '%s'.", input->type_id.c_str());
+      ROS_WARN("Database::callback_object_dimension(): ");
+      ROS_WARN("  Unable to update values for '%s'.", input->type_id.c_str());
       std::cout << std::endl;
     }
   }
@@ -165,10 +166,11 @@ void callback_object_dimension(const thesis::ObjectClass::ConstPtr& input)
   {
     if(debug)
     {
-      ROS_INFO("Database: Updating values for '%s': ", input->type_id.c_str());
-      ROS_INFO("  Confidence: %f.", input->confidence);
-      ROS_INFO("  Width:      %f.", input->width);
-      ROS_INFO("  Height:     %f.", input->height);
+      ROS_INFO("Database::callback_object_dimension(): ");
+      ROS_INFO("  Updating values for '%s': ", input->type_id.c_str());
+      ROS_INFO("    Confidence: %f.", input->confidence);
+      ROS_INFO("    Width:      %f.", input->width);
+      ROS_INFO("    Height:     %f.", input->height);
       std::cout << std::endl;
     }
   }

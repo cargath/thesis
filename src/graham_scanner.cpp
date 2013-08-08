@@ -8,11 +8,28 @@
 
 cv::Point2f GrahamScanner::p0;
 
+/**
+ * @return Angle between a->b and the x-axis in degrees (0 - 180).
+ */
+inline float angle(const cv::Point2f& a, const cv::Point2f& b)
+{
+  if(b.x == a.x)
+  {
+    return 90.0f;
+  }
+  float m = (b.y - a.y) / (b.x - a.x);
+  if(m < 0)
+  {
+    return 180.0f + atan(m) * RAD;
+  }
+  return atan(m) * RAD;
+}
+
 struct grahamScanComparator
 {
   bool operator() (const cv::Point2f& a, const cv::Point2f& b)
   {
-    return angle2f(GrahamScanner::p0, a) < angle2f(GrahamScanner::p0, b);
+    return angle(GrahamScanner::p0, a) < angle(GrahamScanner::p0, b);
   }
 };
 

@@ -16,23 +16,6 @@ inline float det2f(const cv::Point2f& a, const cv::Point2f& b, const cv::Point2f
   return (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
 }
 
-/**
- * @return Angle between a->b and the x-axis in degrees (0 - 180).
- */
-inline float angle2f(const cv::Point2f& a, const cv::Point2f& b)
-{
-  if(b.x == a.x)
-  {
-    return 90.0f;
-  }
-  float m = (b.y - a.y) / (b.x - a.x);
-  if(m < 0)
-  {
-    return 180.0f + atan(m) * RAD;
-  }
-  return atan(m) * RAD;
-}
-
 inline float dot2f(cv::Point2f a, cv::Point2f b)
 {
   return (a.x * b.x) + (a.y * b.y);
@@ -43,19 +26,29 @@ inline float cross2f(cv::Point2f a, cv::Point2f b)
   return (a.x * b.y) - (b.x * a.y);
 }
 
-inline float distance2f(cv::Point2f a, cv::Point2f b)
+inline float mag2f(cv::Point2f p)
 {
-  return sqrt(pow(b.x - a.x, 2) + pow(b.y - a.y, 2));
+  return sqrt(p.x*p.x + p.y*p.y);
 }
 
-inline float dir2angle(const cv::Point2f& dir)
+inline float dist2f(cv::Point2f a, cv::Point2f b)
+{
+  return mag2f(b - a);
+}
+
+inline float angle2f(float x, float y)
+{
+  return atan(y / x);
+}
+
+inline float angle2f(const cv::Point2f& dir)
 {
   return atan(dir.y / dir.x);
 }
 
-inline float dir2angle(float x, float y)
+inline float angle2f(cv::Point2f dir1, cv::Point2f dir2)
 {
-  return atan(y / x);
+  return acos(dot2f(dir1, dir2) / (mag2f(dir1) * mag2f(dir2)));
 }
 
 bool insideConvexPolygon(const std::vector<cv::Point2f>& corners,

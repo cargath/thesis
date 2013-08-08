@@ -51,7 +51,7 @@ ros::Time last_cleanup;
 
 void camera_2_map(const PoseStamped& pose_camera, PoseStamped& pose_map)
 {
-  //
+  // Make sure transformation exists at this point in time
   transform_listener->waitForTransform(
     camera_frame,
     map_frame,
@@ -102,37 +102,6 @@ void object_callback(const thesis::ObjectInstance::ConstPtr& input)
   {
     // Transform object to map space
     camera_2_map(input->pose_stamped, transformed.pose_stamped);
-    
-    // Debug information
-    if(debug)
-    {
-      ROS_INFO("Mapping: Object caught: %s.", input->type_id.c_str());
-      
-      ROS_INFO("  Object position:         (%f, %f, %f).",
-               input->pose_stamped.pose.position.x,
-               input->pose_stamped.pose.position.y,
-               input->pose_stamped.pose.position.z);
-               
-      ROS_INFO("  Object orientation:      (%f, %f, %f, %f).",
-               input->pose_stamped.pose.orientation.x,
-               input->pose_stamped.pose.orientation.y,
-               input->pose_stamped.pose.orientation.z,
-               input->pose_stamped.pose.orientation.w);
-      
-      ROS_INFO("  Transformed position:    (%f, %f, %f).",
-               transformed.pose_stamped.pose.position.x,
-               transformed.pose_stamped.pose.position.y,
-               transformed.pose_stamped.pose.position.z);
-      
-      ROS_INFO("  Transformed orientation: (%f, %f, %f, %f).",
-               transformed.pose_stamped.pose.orientation.x,
-               transformed.pose_stamped.pose.orientation.y,
-               transformed.pose_stamped.pose.orientation.z,
-               transformed.pose_stamped.pose.orientation.w);
-
-      std::cout << std::endl;
-    }
-    
     // Try adding transformed object to map
     thesis::DatabaseGetByID db_get_by_type_service;
     db_get_by_type_service.request.id = input->type_id;
@@ -151,12 +120,14 @@ void object_callback(const thesis::ObjectInstance::ConstPtr& input)
       if(debug)
       {
         ROS_INFO("Mapping: min_distance: %f.", min_distance);
+        std::cout << std::endl;
       }
     }
     else
     {
       // Error
       ROS_WARN("Mapping: Failed to call service 'thesis_database/get_by_type'.");
+      std::cout << std::endl;
       return;
     }
   }
@@ -221,12 +192,9 @@ int main(int argc, char** argv)
   ROS_INFO("  Min confirmations: %i.", min_confirmations);
   std::cout << std::endl;
   
-  // Initialize semantic map
-  semantic_map = SemanticMap(memory_size, debug);
-  last_cleanup = ros::Time::now();
-  
   // Create transform listener
   transform_listener = new tf::TransformListener();
+  
   // Initialize reusable service clients
   ros::service::waitForService("thesis_database/get_by_type", -1);
   db_get_by_type_client = nh.serviceClient<thesis::DatabaseGetByID>("thesis_database/get_by_type");
@@ -236,6 +204,11 @@ int main(int argc, char** argv)
   ros::ServiceServer srv_all         = nh_private.advertiseService("all", get_all);
   ros::ServiceServer srv_by_type     = nh_private.advertiseService("by_type", get_by_type);
   ros::ServiceServer srv_by_position = nh_private.advertiseService("by_position", get_by_position);
+  
+  // Initialize semantic map
+  semantic_map = SemanticMap(memory_size, debug);
+  last_cleanup = ros::Time::now();
+  
   // Spin
   ros::spin();
   // Free memory

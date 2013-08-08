@@ -5,12 +5,11 @@
 #define __SEMANTIC_MAP__
 
 #include <thesis/ObjectInstance.h>
+#include <thesis/uuid.h>
 
 #include <opencv2/core/core.hpp>
 
 #include <tf/tf.h>
-
-#include <thesis/uuid.h>
 
 #include <deque>
 
@@ -56,7 +55,7 @@ class SemanticMap
               double age_threshold);
     
     /**
-     * Attempt to merge duplicates and remove false positives.
+     * Attempt to remove false positives.
      */
     void cleanup(double age_threshold, unsigned int min_confirmations);
 

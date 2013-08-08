@@ -24,12 +24,12 @@ std::string map_frame;
 
 bool        debug;
 
-// Reusable service clients
-ros::ServiceClient db_get_by_type_client;
-ros::ServiceClient map_get_all_client;
-
 // Reusable publishers
 ros::Publisher object_pose_publisher;
+
+// Reusable service clients
+ros::ServiceClient db_get_by_type_client,
+                   map_get_all_client;
 
 // Store markers globally (in order to remove them before publishing new ones)
 visualization_msgs::MarkerArray markers;
@@ -155,6 +155,7 @@ void create_markers(thesis::ObjectInstance object)
         ROS_WARN("Visualisation: ");
         ROS_WARN("  Got bad dimensions from 'thesis_database/get_by_type'.");
         ROS_WARN("  Visualize only axes, not 3D render of the object.");
+        std::cout << std::endl;
       }
     }
   }
@@ -165,6 +166,7 @@ void create_markers(thesis::ObjectInstance object)
       ROS_WARN("Visualisation: ");
       ROS_WARN("  Failed to call service 'thesis_database/get_by_type'.");
       ROS_WARN("  Visualize only axes, not 3D render of the object.");
+      std::cout << std::endl;
     }
   }
   
@@ -219,7 +221,7 @@ int main(int argc, char** argv)
     {
       // Add identity pose
       // (for verifying axis-arrow markers)
-      thesis::ObjectInstance msg;
+      /*thesis::ObjectInstance msg;
       msg.type_id = "Identity";
       msg.pose_stamped.header.stamp       = ros::Time::now();
       msg.pose_stamped.header.frame_id    = map_frame;
@@ -227,15 +229,10 @@ int main(int argc, char** argv)
       msg.pose_stamped.pose.position.y    = 0;
       msg.pose_stamped.pose.position.z    = 0;
       tf::quaternionTFToMsg(IDENTITY_QUATERNION, msg.pose_stamped.pose.orientation);
-      map_get_all_service.response.objects.push_back(msg);
+      map_get_all_service.response.objects.push_back(msg);*/
       // Create various markers for every object
       for(size_t i = 0; i < map_get_all_service.response.objects.size(); i++)
       {
-        if(debug)
-        {
-          ROS_INFO("Creating markers for #%lo: ", i);
-          ROS_INFO("%s", map_get_all_service.response.objects[i].type_id.c_str());
-        }
         create_markers(map_get_all_service.response.objects[i]);
       }
     }
@@ -244,6 +241,7 @@ int main(int argc, char** argv)
       ROS_WARN("Visualisation: ");
       ROS_WARN("  Failed to call service 'thesis_mapping/all'.");
       ROS_WARN("  Unable to visualize the semantic map.");
+      std::cout << std::endl;
     }
     // Publish visualization markers
     object_pose_publisher.publish(markers);
