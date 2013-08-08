@@ -201,17 +201,14 @@ bool reset(int mipmaps)
 
 inline geometry_msgs::Quaternion quaternion_from_plane(cv::Point3f w, cv::Point3f h)
 {
-  ROS_INFO("w:   (%f, %f, %f)", w.x, w.y, w.z);
-  ROS_INFO("h:   (%f, %f, %f)", h.x, h.y, h.z);
   // Calculate the cross product of the given sides of the plane
   cv::Point3f c = cross3f(w, h);
-  ROS_INFO("c:   (%f, %f, %f)", c.x, c.y, c.z);
   // Normalize surface normal
   cv::Point3f n = norm3f(c);
-  ROS_INFO("n:   (%f, %f, %f)", n.x, n.y, n.z);
+  // If we can see an object, it is obviously facing the camera
+  //n = -n;
   // Convert direction vector (surface normal) to Euler angles
   cv::Point3f ypr = xyz2ypr(n);
-  ROS_INFO("ypr: (%f, %f, %f)", ypr.x, ypr.y, ypr.z);
   // Convert Euler angles to quaternion
   return tf::createQuaternionMsgFromRollPitchYaw(ypr.z, ypr.y, ypr.x);
 }
@@ -250,12 +247,11 @@ inline float get_depth(const cv::Mat1f& depth_image, const cv::Point2f& point)
 
 inline void publish_object(const Finding& finding,
                            const cv::Mat& mono8_image,
-                           const cv::Mat1f& depth_image)
+                           const cv::Mat1f& depth_image,
+                           thesis::ObjectInstance& msg_object_pose,
+                           thesis::ObjectInstance& msg_camera_pose,
+                           thesis::ObjectClass& msg_object_meta)
 {
-  // Create empty messages
-  thesis::ObjectInstance msg_object_pose,
-                         msg_camera_pose;
-  thesis::ObjectClass    msg_object_meta;
   // Get current time once, in order to use it for all messages
   ros::Time current_time = ros::Time::now();
   // Fill camera pose
@@ -365,10 +361,6 @@ inline void publish_object(const Finding& finding,
     msg_object_meta.width  = NAN;
     msg_object_meta.height = NAN;
   }
-  // Publish messages
-  object_pose_publisher.publish(msg_object_pose);
-  camera_pose_publisher.publish(msg_camera_pose);
-  object_meta_publisher.publish(msg_object_meta);
 }
 
 inline void recognize(const std::string& sample_id,
@@ -684,7 +676,23 @@ void callback_openni(const sensor_msgs::Image::ConstPtr& rgb_input,
   camera_model.fromCameraInfo(cam_info_input);
   for(size_t i = 0; i < findings.size(); i++)
   {
-    publish_object(findings[i], cv_ptr_mono8->image, depth_image);
+    // Create empty messages
+    thesis::ObjectInstance msg_object_pose,
+                           msg_camera_pose;
+    thesis::ObjectClass    msg_object_meta;
+    // Get values for object messages from findings
+    publish_object(
+      findings[i],
+      cv_ptr_mono8->image,
+      depth_image,
+      msg_object_pose,
+      msg_camera_pose,
+      msg_object_meta
+    );
+    // Publish messages
+    object_pose_publisher.publish(msg_object_pose);
+    camera_pose_publisher.publish(msg_camera_pose);
+    object_meta_publisher.publish(msg_object_meta);
   }
 }
 
