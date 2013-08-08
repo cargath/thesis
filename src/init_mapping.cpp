@@ -216,6 +216,7 @@ void object_array_callback(const thesis::ObjectInstanceArray::ConstPtr& input)
   // Get currently visible objects
   std::vector<thesis::ObjectInstance> visible;
   get_currently_visible(visible);
+  size_t nof_visible = visible.size();
   // Add objects to semantic map
   for(size_t i = 0; i < input->array.size(); i++)
   {
@@ -248,6 +249,15 @@ void object_array_callback(const thesis::ObjectInstanceArray::ConstPtr& input)
       uuid_msgs::fromMsg(visible[i].uuid),
       age_threshold
     );
+  }
+  // Debug output
+  if(debug)
+  {
+    ROS_INFO("Mapping::object_array_callback(): ");
+    ROS_INFO("  %lo visible objects.", nof_visible);
+    ROS_INFO("  %lo of them were updated,", nof_visible - visible.size());
+    ROS_INFO("  %lo were flagged for removal.", visible.size());
+    std::cout << std::endl;
   }
 }
 
