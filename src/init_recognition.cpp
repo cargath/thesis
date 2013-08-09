@@ -52,8 +52,13 @@ using namespace message_filters;
 #define DEPTH_ENC sensor_msgs::image_encodings::TYPE_32FC1
 
 // Camera orientation seen from the camera POV
-static const cv::Point3f               YPR_CAMERA     = xyz2ypr(cv::Point3f(0.0f, 0.0f, 1.0f));
-static const geometry_msgs::Quaternion YPR_CAMERA_MSG = tf::createQuaternionMsgFromRollPitchYaw(YPR_CAMERA.z, YPR_CAMERA.y, YPR_CAMERA.x);
+static const cv::Point3f YPR_CAMERA = getYPR(cv::Point3f(0.0f, 0.0f, 1.0f),
+                                             cv::Point3f(0.0f, 1.0f, 0.0f));
+                                             
+static const geometry_msgs::Quaternion CAMERA_ORIENTATION_MSG
+  = tf::createQuaternionMsgFromRollPitchYaw(YPR_CAMERA.z,
+                                            YPR_CAMERA.y,
+                                            YPR_CAMERA.x);
 
 // Config parameters
 std::string camera_frame;
@@ -188,14 +193,11 @@ bool reset(int mipmaps)
 
 inline geometry_msgs::Quaternion quaternion_from_plane(cv::Point3f w, cv::Point3f h)
 {
-  // Calculate the cross product of the given sides of the plane
-  cv::Point3f c = cross3f(w, h);
-  // Normalize surface normal
-  cv::Point3f n = norm3f(c);
-  // If we can see an object, it is obviously facing the camera
-  //n = -n;
+  // Get the surface normal of the plane defined by w and h
+  // If we can see an object, it is obviously facing the camera (thus the negation)
+  cv::Point3f n = -surfaceNormal3f(w, h);
   // Convert direction vector (surface normal) to Euler angles
-  cv::Point3f ypr = xyz2ypr(n);
+  cv::Point3f ypr = getYPR(n, h);
   // Convert Euler angles to quaternion
   return tf::createQuaternionMsgFromRollPitchYaw(ypr.z, ypr.y, ypr.x);
 }
@@ -249,7 +251,7 @@ inline void publish_object(const Finding& finding,
   msg_camera_pose.pose_stamped.pose.position.x  = 0;
   msg_camera_pose.pose_stamped.pose.position.y  = 0;
   msg_camera_pose.pose_stamped.pose.position.z  = 0;
-  msg_camera_pose.pose_stamped.pose.orientation = YPR_CAMERA_MSG;
+  msg_camera_pose.pose_stamped.pose.orientation = CAMERA_ORIENTATION_MSG;
   // Fill object pose
   msg_object_pose.type_id                   = finding.type_id;
   msg_object_pose.confidence                = finding.confidence;

@@ -135,32 +135,6 @@ inline cv::Point3f norm3f(cv::Point3f p)
   return n;
 }
 
-inline geometry_msgs::Point xyz2ypr(const geometry_msgs::Point& xyz)
-{
-  geometry_msgs::Point ypr;
-  // Yaw, rotation around y-axis
-  ypr.x = angle2f(xyz.x, xyz.z);
-  // Pitch, rotation around x-axis
-  ypr.y = angle2f(xyz.z, xyz.y);
-  // Roll, rotation around z-axis
-  ypr.z = angle2f(xyz.x, xyz.y);
-  //
-  return ypr;
-}
-
-inline cv::Point3f xyz2ypr(const cv::Point3f& xyz)
-{
-  cv::Point3f ypr;
-  // Yaw, rotation around y-axis
-  ypr.x = angle2f(xyz.x, xyz.z);
-  // Pitch, rotation around x-axis
-  ypr.y = angle2f(xyz.z, xyz.y);
-  // Roll, rotation around z-axis
-  ypr.z = angle2f(xyz.x, xyz.y);
-  //
-  return ypr;
-}
-
 inline float angle3f(geometry_msgs::Point dir1, geometry_msgs::Point dir2)
 {
   return acos(dot3f(dir1, dir2) / (mag3f(dir1) * mag3f(dir2)));
@@ -184,6 +158,46 @@ inline cv::Point3f centroid3f(const std::vector<cv::Point3f>& v)
   c.y /= v.size();
   c.z /= v.size();
   return c;
+}
+
+inline cv::Point3f surfaceNormal3f(const cv::Point3f a, const cv::Point3f b)
+{
+  // Calculate the cross product of the given sides of the plane
+  cv::Point3f c = cross3f(a, b);
+  // Normalize surface normal
+  cv::Point3f n = norm3f(c);
+  //
+  return n;
+}
+
+inline cv::Point3f getYPR(const cv::Point3f forward, const cv::Point3f up)
+{
+  cv::Point3f ypr;
+  // Yaw, rotation about the y-axis
+  ypr.x = angle2f(forward.x, forward.z);
+  // Pitch, rotation about the x-axis
+  ypr.y = angle2f(forward.z, forward.y);
+  // Create reference up-vector (y-axis)
+  cv::Matx31f yAxis = cv::Matx31f(0.0f, 1.0f, 0.0f);
+  // Rotate reference up-vector about x-axis (pitch)
+  cv::Matx33f rotX = cv::Matx33f(1.0f,       0.0f,        0.0f,
+                                 0.0f, cos(ypr.y), -sin(ypr.y),
+                                 0.0f, sin(ypr.y),  cos(ypr.y));
+  yAxis = rotX * yAxis;
+  // Rotate reference up-vector about y-axis (yaw)
+  cv::Matx33f rotY = cv::Matx33f( cos(ypr.x), 0.0f,  sin(ypr.x),
+                                        0.0f, 1.0f,        0.0f,
+                                 -sin(ypr.x), 0.0f,  cos(ypr.x));
+  yAxis = rotY * yAxis;
+  // Get rotated reference up-vector as cv::Point3f
+  cv::Point3f upReference;
+  upReference.x = yAxis(1);
+  upReference.y = yAxis(2);
+  upReference.z = yAxis(3);
+  // Roll, rotation about the z-axis
+  ypr.z = angle3f(upReference, up);
+  // Done
+  return ypr;
 }
 
 #endif //__MATH3D__
