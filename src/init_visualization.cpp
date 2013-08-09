@@ -56,7 +56,7 @@ void create_markers(thesis::ObjectInstance object)
   visualization_msgs::Marker object_marker;
   
   // Setup the values that are valid for all markers
-  object_marker.ns              = "thesis_example";
+  object_marker.ns              = "thesis_visualization";
   object_marker.action          = visualization_msgs::Marker::ADD;
   object_marker.header.frame_id = map_frame;
   object_marker.header.stamp    = ros::Time();
@@ -126,26 +126,22 @@ void create_markers(thesis::ObjectInstance object)
       object_marker.color.r = 0.0;
       object_marker.color.g = 1.0;
       object_marker.color.b = 0.0;
+      object_marker.scale.x = w;
+      object_marker.scale.y = h;
+      object_marker.scale.z = 0.01;
       // Attributes for either box or sphere
       if(!isnan(object.pose_stamped.pose.orientation))
       {
         // Box; representing a 3D render of the object
-        object_marker.type    = visualization_msgs::Marker::CUBE;
-        object_marker.scale.x = w;
-        object_marker.scale.y = h;
-        object_marker.scale.z = 0.01;
+        object_marker.type = visualization_msgs::Marker::CUBE;
       }
       else
       {
-        // Use radius instead width and height for markers without orientation
-        double r = (w + h) / 2.0;
         // Use default values for orientation to avoid rviz errors
         tf::quaternionTFToMsg(IDENTITY_QUATERNION, object_marker.pose.orientation);
-        // Sphere; representing a 3D of the object without orientation
-        object_marker.type    = visualization_msgs::Marker::SPHERE;
-        object_marker.scale.x = r;
-        object_marker.scale.y = r;
-        object_marker.scale.z = r;
+        // A point; representing a 3D of the object without orientation
+        object_marker.type = visualization_msgs::Marker::POINTS;
+        object_marker.points.push_back(object.pose_stamped.pose.position);
       }
       // Add box or sphere
       markers.markers.push_back(object_marker);
@@ -154,7 +150,7 @@ void create_markers(thesis::ObjectInstance object)
     {
       if(debug)
       {
-        ROS_WARN("Visualisation: ");
+        ROS_WARN("Visualization: ");
         ROS_WARN("  Got bad dimensions from 'thesis_database/get_by_type'.");
         ROS_WARN("  Visualize only axes, not 3D render of the object.");
         std::cout << std::endl;
@@ -163,7 +159,7 @@ void create_markers(thesis::ObjectInstance object)
   }
   else
   {
-    ROS_WARN("Visualisation: ");
+    ROS_WARN("Visualization: ");
     ROS_WARN("  Failed to call service 'thesis_database/get_by_type'.");
     ROS_WARN("  Visualize only axes, not 3D render of the object.");
     std::cout << std::endl;
@@ -180,24 +176,45 @@ void create_markers(thesis::ObjectInstance object)
   markers.markers.push_back(object_marker);
 }
 
+void mark_as_visible(thesis::ObjectInstance object)
+{
+  visualization_msgs::Marker object_marker;
+  
+  // Create additional markers for currently visible objects
+  // (Text will 'glow' green)
+  object_marker.pose    = object.pose_stamped.pose;
+  object_marker.id      = unique_marker_id++;
+  object_marker.type    = visualization_msgs::Marker::TEXT_VIEW_FACING;
+  object_marker.scale.x = 0.11;
+  object_marker.scale.y = 0.11;
+  object_marker.scale.z = 0.11;
+  object_marker.color.r = 0.0;
+  object_marker.color.g = 1.0;
+  object_marker.color.b = 0.0;
+  object_marker.text    = object.type_id;
+  tf::quaternionTFToMsg(IDENTITY_QUATERNION, object_marker.pose.orientation);
+  
+  markers.markers.push_back(object_marker);
+}
+
 int main(int argc, char** argv)
 {
   // Initialize ROS
-  ros::init(argc, argv, "thesis_example");
+  ros::init(argc, argv, "thesis_visualization");
   ros::NodeHandle nh;
   ros::NodeHandle nh_private("~");
   
   // Get global parameters
   nh.getParam("/thesis/map_frame", map_frame);
   
-  ROS_INFO("Visualisation (global parameters): ");
+  ROS_INFO("Visualization (global parameters): ");
   ROS_INFO("  Map frame: %s.", map_frame.c_str());
   std::cout << std::endl;
   
   // Get local parameters
   nh_private.param("debug", debug, false);
   
-  ROS_INFO("Visualisation (local parameters): ");
+  ROS_INFO("Visualization (local parameters): ");
   ROS_INFO("  Debug mode: %s.", debug ? "true" : "false");
   std::cout << std::endl;
   
@@ -241,7 +258,7 @@ int main(int argc, char** argv)
     }
     else
     {
-      ROS_WARN("Visualisation: ");
+      ROS_WARN("Visualization: ");
       ROS_WARN("  Failed to call service 'thesis_mapping/all'.");
       ROS_WARN("  Unable to visualize the semantic map.");
       std::cout << std::endl;
@@ -250,15 +267,15 @@ int main(int argc, char** argv)
     thesis::MappingGetVisible map_get_visible_service;
     if(map_get_visible_client.call(map_get_visible_service))
     {
-      // Create special markers for currently visible objects
+      // Create additional markers for currently visible objects
       for(size_t i = 0; i < map_get_visible_service.response.objects.size(); i++)
       {
-        // TODO
+        mark_as_visible(map_get_visible_service.response.objects[i]);
       }
     }
     else
     {
-      ROS_WARN("Visualisation: ");
+      ROS_WARN("Visualization: ");
       ROS_WARN("  Failed to call service 'thesis_mapping/visible'.");
       ROS_WARN("  Unable to visualize currently visible objects.");
       std::cout << std::endl;

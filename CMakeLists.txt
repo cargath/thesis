@@ -78,7 +78,7 @@ target_link_libraries(init_recognition shared perception)
 rosbuild_add_executable(init_mapping src/init_mapping.cpp src/semantic_map.cpp)
 
 # Node visualization
-rosbuild_add_executable(init_example src/init_example.cpp)
+rosbuild_add_executable(init_visualization src/init_visualization.cpp)
 
 # Link with boost
 target_link_libraries(init_database boost_filesystem boost_system)

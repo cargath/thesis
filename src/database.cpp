@@ -189,7 +189,7 @@ bool Database::add_image
       re_size = cv::Size(image.cols * aspect_ratio_height,
                          image.rows * aspect_ratio_height);
     }
-    // ...and resize it accordingly
+    // Debug output
     ROS_INFO("While trying to add an image to the database:");
     ROS_INFO("  Image '%s' is bigger than %i x %i.",
       name.c_str(),
@@ -197,6 +197,8 @@ bool Database::add_image
       max_image_size.height
     );
     ROS_INFO("  Resizing it to %i x %i.", re_size.width, re_size.height);
+    std::cout << std::endl;
+    // ...and resize it accordingly
     cv::resize(image, image_resized, re_size);
   }
   else
@@ -214,7 +216,6 @@ bool Database::add_image
   cv_image.image = image_resized;
   cv_image.toImageMsg(entry->image);
   // Success
-  std::cout << std::endl;
   return true;
 }
 

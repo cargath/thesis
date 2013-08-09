@@ -39,7 +39,7 @@
   </node>
   
   <!-- Visualisation -->
-  <node pkg="thesis" type="init_example" name="thesis_example" output="screen">
+  <node pkg="thesis" type="init_visualization" name="thesis_visualization" output="screen">
     <param name="debug" type="bool" value="false"/>
   </node>
 </launch>

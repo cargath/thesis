@@ -271,6 +271,7 @@ int main(int argc, char** argv)
   std::vector<cv::Mat> images;
   std::vector<std::string> filenames;
   image_loader.load_directory(image_path, images, filenames);
+  std::cout << std::endl; // after debug output from load_directory()
   for(size_t i = 0; i < images.size(); i++)
   {
     database.add_image(images[i], filenames[i], min_image_size, max_image_size);
