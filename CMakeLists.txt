@@ -25,7 +25,7 @@ rosbuild_genmsg()
 rosbuild_gensrv()
 
 # Shared library
-rosbuild_add_library(shared src/math2d.cpp src/fps_calculator.cpp)
+rosbuild_add_library(shared src/math2d.cpp src/math3d.cpp src/fps_calculator.cpp)
 
 # Perception library
 rosbuild_add_library(
