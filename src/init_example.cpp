@@ -14,6 +14,7 @@
 // We want to call these services
 #include <thesis/DatabaseGetByID.h>
 #include <thesis/MappingGetAll.h>
+#include <thesis/MappingGetVisible.h>
 
 // We are going to publish messages of these types
 #include <visualization_msgs/Marker.h>
@@ -29,7 +30,8 @@ ros::Publisher object_pose_publisher;
 
 // Reusable service clients
 ros::ServiceClient db_get_by_type_client,
-                   map_get_all_client;
+                   map_get_all_client,
+                   map_get_visible_client;
 
 // Store markers globally (in order to remove them before publishing new ones)
 visualization_msgs::MarkerArray markers;
@@ -161,13 +163,10 @@ void create_markers(thesis::ObjectInstance object)
   }
   else
   {
-    if(debug)
-    {
-      ROS_WARN("Visualisation: ");
-      ROS_WARN("  Failed to call service 'thesis_database/get_by_type'.");
-      ROS_WARN("  Visualize only axes, not 3D render of the object.");
-      std::cout << std::endl;
-    }
+    ROS_WARN("Visualisation: ");
+    ROS_WARN("  Failed to call service 'thesis_database/get_by_type'.");
+    ROS_WARN("  Visualize only axes, not 3D render of the object.");
+    std::cout << std::endl;
   }
   
   // Text; identifies the objects type (since we can't use textures)
@@ -207,6 +206,8 @@ int main(int argc, char** argv)
   db_get_by_type_client = nh.serviceClient<thesis::DatabaseGetByID>("thesis_database/get_by_type");
   ros::service::waitForService("thesis_mapping/all", -1);
   map_get_all_client = nh.serviceClient<thesis::MappingGetAll>("thesis_mapping/all");
+  ros::service::waitForService("thesis_mapping/visible", -1);
+  map_get_visible_client = nh.serviceClient<thesis::MappingGetVisible>("thesis_mapping/visible");
   // Publish transformed object + camera poses for debug purposes
   object_pose_publisher = nh.advertise<visualization_msgs::MarkerArray>("visualization_marker_array", 1);
   // Clear, create new and publish markers
@@ -215,21 +216,23 @@ int main(int argc, char** argv)
   {
     // Remove previously published markers
     clear_markers();
-    // Get objects from semantic map
+    // Get all objects from semantic map
     thesis::MappingGetAll map_get_all_service;
     if(map_get_all_client.call(map_get_all_service))
     {
-      // Add identity pose
-      // (for verifying axis-arrow markers)
-      /*thesis::ObjectInstance msg;
-      msg.type_id = "Identity";
-      msg.pose_stamped.header.stamp       = ros::Time::now();
-      msg.pose_stamped.header.frame_id    = map_frame;
-      msg.pose_stamped.pose.position.x    = 0;
-      msg.pose_stamped.pose.position.y    = 0;
-      msg.pose_stamped.pose.position.z    = 0;
-      tf::quaternionTFToMsg(IDENTITY_QUATERNION, msg.pose_stamped.pose.orientation);
-      map_get_all_service.response.objects.push_back(msg);*/
+      // Add identity pose (for verifying axis-arrow markers)
+      if(debug)
+      {
+        thesis::ObjectInstance msg;
+        msg.type_id = "Identity";
+        msg.pose_stamped.header.stamp       = ros::Time::now();
+        msg.pose_stamped.header.frame_id    = map_frame;
+        msg.pose_stamped.pose.position.x    = 0;
+        msg.pose_stamped.pose.position.y    = 0;
+        msg.pose_stamped.pose.position.z    = 0;
+        tf::quaternionTFToMsg(IDENTITY_QUATERNION, msg.pose_stamped.pose.orientation);
+        map_get_all_service.response.objects.push_back(msg);
+      }
       // Create various markers for every object
       for(size_t i = 0; i < map_get_all_service.response.objects.size(); i++)
       {
@@ -241,6 +244,23 @@ int main(int argc, char** argv)
       ROS_WARN("Visualisation: ");
       ROS_WARN("  Failed to call service 'thesis_mapping/all'.");
       ROS_WARN("  Unable to visualize the semantic map.");
+      std::cout << std::endl;
+    }
+    // Get currently visible objects from semantic map
+    thesis::MappingGetVisible map_get_visible_service;
+    if(map_get_visible_client.call(map_get_visible_service))
+    {
+      // Create special markers for currently visible objects
+      for(size_t i = 0; i < map_get_visible_service.response.objects.size(); i++)
+      {
+        // TODO
+      }
+    }
+    else
+    {
+      ROS_WARN("Visualisation: ");
+      ROS_WARN("  Failed to call service 'thesis_mapping/visible'.");
+      ROS_WARN("  Unable to visualize currently visible objects.");
       std::cout << std::endl;
     }
     // Publish visualization markers

@@ -90,7 +90,7 @@ class Database
         ObjectQueue(const int memory_size=0) : memory_size(memory_size)
         {
           //
-          ROS_INFO("Database::ObjectQueue(%i);", memory_size);
+          ROS_DEBUG("Database::ObjectQueue(%i);", memory_size);
         }
         
         /**

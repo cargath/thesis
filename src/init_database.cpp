@@ -19,6 +19,7 @@
 
 // My message types
 #include <thesis/ObjectClass.h>
+#include <thesis/ObjectClassArray.h>
 
 // Empty message to inform subscribing nodes about changes
 #include <std_msgs/Empty.h>
@@ -133,6 +134,16 @@ bool callback_get_by_type(thesis::DatabaseGetByID::Request& request,
     result.object_class = temp;
     return true;
   }
+  // For debugging purposes
+  else if(request.id == "Identity")
+  {
+    thesis::ObjectClass identity;
+    identity.type_id = "Identity";
+    identity.width   = 0.1;
+    identity.height  = 0.1;
+    result.object_class = identity;
+    return true;
+  }
   else
   {
     return false;
@@ -151,27 +162,30 @@ void callback_openni_once(const sensor_msgs::CameraInfo::ConstPtr& input)
   openni_once = true;
 }
 
-void callback_object_dimension(const thesis::ObjectClass::ConstPtr& input)
+void callback_object_dimension(const thesis::ObjectClassArray::ConstPtr& input)
 {
-  if(!database.update(*input) && debug)
+  for(size_t i = 0; i < input->array.size(); i++)
   {
-    if(debug)
+    if(!database.update(input->array[i]) && debug)
     {
-      ROS_WARN("Database::callback_object_dimension(): ");
-      ROS_WARN("  Unable to update values for '%s'.", input->type_id.c_str());
-      std::cout << std::endl;
+      if(debug)
+      {
+        ROS_WARN("Database::callback_object_dimension(): ");
+        ROS_WARN("  Unable to update values for '%s'.", input->array[i].type_id.c_str());
+        std::cout << std::endl;
+      }
     }
-  }
-  else
-  {
-    if(debug)
+    else
     {
-      ROS_INFO("Database::callback_object_dimension(): ");
-      ROS_INFO("  Updating values for '%s': ", input->type_id.c_str());
-      ROS_INFO("    Confidence: %f.", input->confidence);
-      ROS_INFO("    Width:      %f.", input->width);
-      ROS_INFO("    Height:     %f.", input->height);
-      std::cout << std::endl;
+      if(debug)
+      {
+        ROS_INFO("Database::callback_object_dimension(): ");
+        ROS_INFO("  Updating values for '%s': ", input->array[i].type_id.c_str());
+        ROS_INFO("    Confidence: %f.", input->array[i].confidence);
+        ROS_INFO("    Width:      %f.", input->array[i].width);
+        ROS_INFO("    Height:     %f.", input->array[i].height);
+        std::cout << std::endl;
+      }
     }
   }
 }

@@ -102,7 +102,7 @@ class SemanticMap
           // Not yet flagged for removal
           flags = 0;
           // For debugging purposes
-          ROS_INFO("SemanticMap::ObjectQueue(%i);", memory_size);
+          ROS_DEBUG("SemanticMap::ObjectQueue(%i);", memory_size);
         };
         
         /**
