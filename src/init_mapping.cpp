@@ -157,7 +157,7 @@ inline void get_currently_visible(std::vector<thesis::ObjectInstance>& visible)
   }
 }
 
-boost::uuids::uuid* object_callback(const thesis::ObjectInstance& input)
+bool object_callback(const thesis::ObjectInstance& input, boost::uuids::uuid& id)
 {
   // 
   thesis::ObjectInstance transformed;
@@ -181,7 +181,7 @@ boost::uuids::uuid* object_callback(const thesis::ObjectInstance& input)
       // Transform object to map space
       camera_2_map(input.pose_stamped, transformed.pose_stamped);
       // Add object to semantic map
-      return semantic_map.add(transformed, min_distance);
+      return semantic_map.add(transformed, id, min_distance);
     }
     else
     {
@@ -193,7 +193,9 @@ boost::uuids::uuid* object_callback(const thesis::ObjectInstance& input)
         ROS_INFO("  Don't add object to semantic map.");
         std::cout << std::endl;
       }
-      return NULL;
+      // 'true' might seem weird,
+      // but it must remain consistent with SemanticMap::add()
+      return true;
     }
   }
   else
@@ -205,7 +207,9 @@ boost::uuids::uuid* object_callback(const thesis::ObjectInstance& input)
       ROS_INFO("  Got bad object position values (at least one is NaN).");
       std::cout << std::endl;
     }
-    return NULL;
+    // 'true' might seem weird,
+    // but it must remain consistent with SemanticMap::add()
+    return true;
   }
 }
 
@@ -224,15 +228,15 @@ void object_array_callback(const thesis::ObjectInstanceArray::ConstPtr& input)
   // Add objects to semantic map
   for(size_t i = 0; i < input->array.size(); i++)
   {
-    boost::uuids::uuid* id = object_callback(input->array[i]);
-    // NULL if an object was updated instead of adding a new one
-    if(id != NULL)
+    boost::uuids::uuid id;
+    // 'false' if an object was updated instead of adding a new one
+    if(!object_callback(input->array[i], id))
     {
       // Remove updated objects from currently visible objects
       std::vector<thesis::ObjectInstance>::iterator vec_iter = visible.begin();
       while(vec_iter != visible.end())
       {
-        if(uuid_msgs::fromMsg(vec_iter->uuid) == *id)
+        if(uuid_msgs::fromMsg(vec_iter->uuid) == id)
         {
           vec_iter = visible.erase(vec_iter);
           // We shouldn't find an object with the same UUID again

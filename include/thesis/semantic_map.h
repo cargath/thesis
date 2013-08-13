@@ -78,12 +78,15 @@ class SemanticMap
     
     /**
      * @param  Add this object to the storage of this map.
+     * @param  The UUID of the updated object (if no new one was added).
      * @param  Minimal distance to existing objects,
      *         otherwise attempt updating instead of adding.
-     * @return Pointer to the UUID of the existing object, if one was updated.
-     *         NULL if object was added (instead of updating an existing one).
+     * @return true, if an object was added,
+     *         false, if an existing one was updated instead.
      */
-    boost::uuids::uuid* add(const thesis::ObjectInstance& object, float min_distance=0.0f);
+    bool add(const thesis::ObjectInstance& object,
+             boost::uuids::uuid& id,
+             float min_distance=0.0f);
   
   protected:
     class ObjectQueue
@@ -117,11 +120,6 @@ class SemanticMap
          * @return This objects UUID.
          */
         boost::uuids::uuid getID();
-        
-        /**
-         * @return Pointer to this objects UUID.
-         */
-        boost::uuids::uuid* getIDPtr();
         
         /**
          * @return Time since initialization in seconds.

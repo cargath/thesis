@@ -38,9 +38,11 @@ double SemanticMap::EvaluationComparator::evaluate
   double y = 0.5 - atan(x*2.5 -5) / M_PI;
   
   //
-//  std::cout << "Semantic map: Evaluate: "      << std::endl;
-//  std::cout << "  x: "                    << x << std::endl;
-//  std::cout << "  y: "                    << y << std::endl;
+  std::cout << "SemanticMap::evaluate()"      << std::endl;
+  std::cout << "  Time:        "         << t << std::endl;
+  std::cout << "  Distance:    "         << d << std::endl;
+  std::cout << "  Match Ratio: "         << c << std::endl;
+  std::cout                                   << std::endl;
   
   //
   return y;
@@ -49,11 +51,6 @@ double SemanticMap::EvaluationComparator::evaluate
 boost::uuids::uuid SemanticMap::ObjectQueue::getID()
 {
   return id;
-}
-
-boost::uuids::uuid* SemanticMap::ObjectQueue::getIDPtr()
-{
-  return &id;
 }
 
 double SemanticMap::ObjectQueue::age()
@@ -251,7 +248,12 @@ void SemanticMap::cleanup(double age_threshold, unsigned int min_confirmations)
   }
 }
 
-boost::uuids::uuid* SemanticMap::add(const thesis::ObjectInstance& object, float min_distance)
+bool SemanticMap::add
+(
+  const thesis::ObjectInstance& object,
+  boost::uuids::uuid& id,
+  float min_distance
+)
 {
   //
   cv::Point3f p = ros2cv3f(object.pose_stamped.pose.position);
@@ -316,7 +318,8 @@ boost::uuids::uuid* SemanticMap::add(const thesis::ObjectInstance& object, float
     // ...and update its entry
     closest->add(object);
     // Return UUID of the updated object
-    return closest->getIDPtr();
+    id = closest->getID();
+    return false;
   }
   // If one object of this type already exists at the same position...
   else if(existing_objects.size() == 1)
@@ -334,7 +337,8 @@ boost::uuids::uuid* SemanticMap::add(const thesis::ObjectInstance& object, float
     // ...update the entry
     existing_objects.front()->add(object);
     // Return UUID of the updated object
-    return existing_objects.front()->getIDPtr();
+    id = existing_objects.front()->getID();
+    return false;
   }
   // If there isn't already an object of this type...
   else
@@ -354,7 +358,7 @@ boost::uuids::uuid* SemanticMap::add(const thesis::ObjectInstance& object, float
     entry.add(object);
     map[object.type_id].push_back(entry);
     // Return 'NULL' if object was really added (not updated)
-    return NULL;
+    return true;
   }
 }
 
