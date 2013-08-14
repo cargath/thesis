@@ -57,33 +57,51 @@ ros::Time last_cleanup;
 
 void map_2_camera(const PoseStamped& pose_map, PoseStamped& pose_camera)
 {
-  // Make sure transformation exists at this point in time
-  if(transform_listener->waitForTransform(
-    map_frame,
-    camera_frame,
-    pose_map.header.stamp,
-    ros::Duration(tf_timeout)
-  ))
+  try
   {
-    // Transform recognized camera pose to map frame
-    transform_listener->transformPose(camera_frame, pose_map, pose_camera);
-    pose_camera.header.stamp = ros::Time::now();
+    // Make sure transformation exists at this point in time
+    if(transform_listener->waitForTransform(
+      map_frame,
+      camera_frame,
+      pose_map.header.stamp,
+      ros::Duration(tf_timeout)
+    ))
+    {
+      // Transform recognized camera pose to map frame
+      transform_listener->transformPose(camera_frame, pose_map, pose_camera);
+      pose_camera.header.stamp = ros::Time::now();
+    }
+  }
+  catch(tf::TransformException e)
+  {
+    ROS_ERROR("Mapping::map_2_camera(): ");
+    ROS_ERROR("  tf::TransformException caught.");
+    ROS_ERROR("  %s", e.what());
   }
 }
 
 void camera_2_map(const PoseStamped& pose_camera, PoseStamped& pose_map)
 {
-  // Make sure transformation exists at this point in time
-  if(transform_listener->waitForTransform(
-    camera_frame,
-    map_frame,
-    pose_camera.header.stamp,
-    ros::Duration(tf_timeout)
-  ))
+  try
   {
-    // Transform recognized camera pose to map frame
-    transform_listener->transformPose(map_frame, pose_camera, pose_map);
-    pose_map.header.stamp = ros::Time(0);
+    // Make sure transformation exists at this point in time
+    if(transform_listener->waitForTransform(
+      camera_frame,
+      map_frame,
+      pose_camera.header.stamp,
+      ros::Duration(tf_timeout)
+    ))
+    {
+      // Transform recognized camera pose to map frame
+      transform_listener->transformPose(map_frame, pose_camera, pose_map);
+      pose_map.header.stamp = ros::Time(0);
+    }
+  }
+  catch(tf::TransformException e)
+  {
+    ROS_ERROR("Mapping::camera_2_map(): ");
+    ROS_ERROR("  tf::TransformException caught.");
+    ROS_ERROR("  %s", e.what());
   }
 }
 
