@@ -178,11 +178,19 @@ void create_markers(thesis::ObjectInstance object)
 
 void mark_as_visible(thesis::ObjectInstance object)
 {
-  visualization_msgs::Marker object_marker;
-  
   // Create additional markers for currently visible objects
   // (Text will 'glow' green)
-  object_marker.pose    = object.pose_stamped.pose;
+  visualization_msgs::Marker object_marker;
+  
+  // Setup the values that are valid for all markers
+  object_marker.ns              = "thesis_visualization";
+  object_marker.action          = visualization_msgs::Marker::ADD;
+  object_marker.header.frame_id = map_frame;
+  object_marker.header.stamp    = ros::Time();
+  object_marker.pose            = object.pose_stamped.pose;
+  object_marker.color.a         = 1.0;
+  
+  // Setup the values only viable for this type of markers
   object_marker.id      = unique_marker_id++;
   object_marker.type    = visualization_msgs::Marker::TEXT_VIEW_FACING;
   object_marker.scale.x = 0.11;
