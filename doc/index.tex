@@ -10,17 +10,19 @@
 
 \begin{document}
 
-\title{\textbf{Perceiving and memorising packaged goods} \\ (in a supermarket environment) \\ \vspace{7.5mm} \textsc{Diploma Thesis}}
-\author{Carsten K\"onemann \\ \texttt{cargath@gmail.com}}
+\title{\textbf{Perceiving and memorising packaged goods in a supermarket environment} \vspace{7.5mm} \\ \textsc{Diploma Thesis}}
+\author{Universit\"at Bremen \\ Fachbereich 3: Mathematik und Informatik \vspace{3.5mm} \\ Carsten K\"onemann \\ Matrikel-Nr.: 2261713}
 \date{08.10.2013}
 
 \maketitle
 
-\chapter{Abstract}
+\chapter*{Abstract}
+
 
 \tableofcontents
 
 \chapter{Introduction}
+
 
 \section{Review}
 Current solutions can be divided into two groups: Those which search for a specific object as needed, and those which utilize a set of predetermined locations. \\
@@ -55,28 +57,43 @@ Since perceiving arbitrary objects is a whole field of study on its own this pap
 \section{Architecture} % 'Echtes' UML verwenden?
 
 \newpage
-\begin{figure}[H]
+\begin{figure}
   \begin{tikzpicture}[->, scale=1.8, auto, swap]
     % Draw the vertices.
-    \node [vertex] (a) at (2.5, 5) {\texttt{Database}};
-    \node [vertex] (b) at (  0, 0) {\texttt{Perception}};
-    \node [vertex] (c) at (  5, 0) {\texttt{Semantic Map}};
+    \node [vertex] (a) at (  0,  3) {\texttt{Database}};
+    \node [vertex] (b) at (2.5,  6) {\texttt{Perception}};
+    \node [vertex] (c) at (  5,  3) {\texttt{Semantic Map}};
+    \node [vertex] (d) at (2.5,  0) {\texttt{Visualization}};
     % Database <-> Perception.
-    \path [edge] (a) edge [] node [right] {const class values} (b);
-    \path [edge] (b) edge [bend left] node [left] {class values} (a);
+    \path [edge] (a) edge [bend left] node [left] {const class values} (b);
+    \path [edge] (b) edge [bend left] node [right] {class values} (a);
     % Perception -> Semantic Map.
-    \path [edge] (b) edge [bend right] node {instance values} (c);
+    \path [edge] (b) edge [] node [right] {instance values} (c);
     % Database -> Semantic Map.
-    \path [edge] (a) edge [bend left] node [right] {class values} (c);
+    \path [edge] (a) edge [] node [] {class values} (c);
+    % Database -> Visualization.
+    \path [edge] (a) edge [] node [left] {const class values, \\ class values} (d);
+    % Semantic Map -> Visualization.
+    \path [edge] (c) edge [] node [right] {instance values} (d);
   \end{tikzpicture}
 \end{figure}
 
 \newpage
 \subsection{Datatypes}
+For example, all packs of cornflakes of one brand look the same and have the same dimensions.
+
 \subsection{Database}
-\subsection{Perception}
+The database is responsible for storing all the information that holds true for all instances of the same class of an object. 
+
+\subsection{Perception} % Dedicated subsection about OpenNI / RGB-D camera?
+
+
 \subsection{Semantic Map}
+
+
 \subsection{Visualization}
+The visualization takes on the roll of a user who wants to work with the new information provided by the proposed system. 
+
 
 \newpage
 \section{Implementation}
