@@ -39,6 +39,9 @@
 // FPS counter for debugging purposes
 #include <thesis/fps_calculator.h>
 
+// Filestream for logging
+#include <fstream>
+
 using namespace sensor_msgs;
 using namespace message_filters;
 
@@ -63,7 +66,8 @@ static const geometry_msgs::Quaternion CAMERA_ORIENTATION_MSG
 // Config parameters
 std::string camera_frame;
 
-bool        debug;
+bool        debug,
+            logging;
 
 int         mipmap_level,
             max_objects_per_frame,
@@ -71,6 +75,9 @@ int         mipmap_level,
             
 double      openni_timeout,
             knn_1to2_ratio;
+
+// Logfile
+std::fstream logfile;
 
 // We try to get the image size of a connected OpenNI camera (if available)
 bool openni_once = false;
@@ -259,37 +266,50 @@ inline void publish_object(const Finding& finding,
   // Fill object metadata
   msg_object_meta.type_id    = finding.type_id;
   msg_object_meta.confidence = finding.confidence;
+  // Get center of the object in camera image coordinate space
+  cv::Point2f finding_centroid = centroid2f(finding.points);
+  float finding_centroid_depth = get_depth(depth_image, finding_centroid);
   // Get object points in camera coordinate space
-  std::vector<cv::Point3f> camera_coordinates,
-                           good_camera_coordinates;
+  std::vector<cv::Point3f> camera_coordinates;
   for(size_t i = 0; i < finding.points.size(); i++)
   {
-    // Get depth value for current pixel
-    float depth = get_depth(depth_image, finding.points[i]);
-    // Check if there is a valid depth value for this pixel
-    if(isnan(depth) || depth == 0)
+    // Vector from centroid to corner
+    cv::Point2f center2corner = finding_centroid - finding.points[i];
+    // Get pixel halfway between corner and centroid
+    cv::Point2f midway = finding_centroid + (0.5f * center2corner);
+    // Get depth value for that pixel
+    float midway_depth = get_depth(depth_image, midway);
+    // Distance from centroid to midway in z-direction
+    float corner2midway_depth = finding_centroid_depth - midway_depth;
+    // Compute depth for actual corner
+    float corner_depth = finding_centroid_depth + (2.0f * corner2midway_depth);
+    // Check if we got a valid depth value for this pixel
+    if(isnan(corner_depth) || corner_depth == 0)
     {
       camera_coordinates.push_back(cv::Point3f(NAN, NAN, NAN));
-      continue;
     }
-    // Project object point to camera coordinate space
-    cv::Point3f camera_coordinate = camera_model.projectPixelTo3dRay(finding.points[i]);
-    // Use distance from depth image to get actual 3D position in camera space
-    camera_coordinate *= depth;
-    // Add result to our vector holding successfully transformed points
-    camera_coordinates.push_back(camera_coordinate);
-    good_camera_coordinates.push_back(camera_coordinate);
+    else
+    {
+      // Project object point to camera coordinate space
+      cv::Point3f camera_coordinate = camera_model.projectPixelTo3dRay(finding.points[i]);
+      // Use value from depth image to get actual 3D position in camera space
+      camera_coordinate *= corner_depth;
+      // Add result to our vector holding successfully transformed points
+      camera_coordinates.push_back(camera_coordinate);
+    }
   }
   // Get object position in camera coordinate space
-  if(good_camera_coordinates.size() >= 1)
+  if(!isnan(finding_centroid_depth) || finding_centroid_depth != 0)
   {
-    // Position = Centroid of good points in camera coordinate space
-    cv::Point3f centroid = centroid3f(good_camera_coordinates);
+    // Project object centroid to camera coordinate space
+    cv::Point3f camera_coordinate = camera_model.projectPixelTo3dRay(finding_centroid);
+    // Use value from depth image to get actual 3D position in camera space
+    camera_coordinate *= finding_centroid_depth;
     // Fill object pose message
     msg_object_pose.pose_stamped.header.frame_id = camera_frame;
-    msg_object_pose.pose_stamped.pose.position.x = centroid.x;
-    msg_object_pose.pose_stamped.pose.position.y = centroid.y;
-    msg_object_pose.pose_stamped.pose.position.z = centroid.z;
+    msg_object_pose.pose_stamped.pose.position.x = camera_coordinate.x;
+    msg_object_pose.pose_stamped.pose.position.y = camera_coordinate.y;
+    msg_object_pose.pose_stamped.pose.position.z = camera_coordinate.z;
   }
   else
   {
@@ -611,11 +631,15 @@ void callback_openni(const sensor_msgs::Image::ConstPtr& rgb_input,
   {
     callback_simple(cv_ptr_mono8->image, cv_ptr_bgr8->image, findings);
   }
-  // Publish objects
+  // These messages will be published
   thesis::ObjectInstanceArray msgs_object_pose,
                               msgs_camera_pose;
   thesis::ObjectClassArray    msgs_object_meta;
+  // Line to append to logfile
+  std::stringstream log_current;
+  // Update current camera model in order to project 2D pixel to 3D ray
   camera_model.fromCameraInfo(cam_info_input);
+  // Publish objects
   for(size_t i = 0; i < findings.size(); i++)
   {
     // Create empty messages
@@ -635,11 +659,18 @@ void callback_openni(const sensor_msgs::Image::ConstPtr& rgb_input,
     msgs_object_pose.array.push_back(msg_object_pose);
     msgs_camera_pose.array.push_back(msg_camera_pose);
     msgs_object_meta.array.push_back(msg_object_meta);
+    //
+    log_current << findings[i].type_id << ",";
   }
   // Publish messages
   object_pose_publisher.publish(msgs_object_pose);
   camera_pose_publisher.publish(msgs_camera_pose);
   object_meta_publisher.publish(msgs_object_meta);
+  // Append line to logfile
+  if(logging)
+  {
+    logfile << log_current;
+  }
 }
 
 void callback_database_update(const std_msgs::Empty::ConstPtr& input)
@@ -682,13 +713,15 @@ int main(int argc, char** argv)
   
   // Get local parameters
   nh_private.param("debug",                 debug,                 false);
+  nh_private.param("logging",               logging,               false);
   nh_private.param("mipmap_level",          mipmap_level,          0);
   nh_private.param("max_objects_per_frame", max_objects_per_frame, 1);
   nh_private.param("max_nof_keypoints",     max_nof_keypoints,     64);
   nh_private.param("knn_1to2_ratio",        knn_1to2_ratio,        0.9);
   
   ROS_INFO("Perception (local parameters): ");
-  ROS_INFO("  Debug mode:                 %s.", debug ? "true" : "false");
+  ROS_INFO("  Debug mode:                 %s.", debug   ? "true" : "false");
+  ROS_INFO("  Logging:                    %s.", logging ? "true" : "false");
   ROS_INFO("  Mipmap level:               %i.", mipmap_level);
   ROS_INFO("  Max objects per frame:      %i.", max_objects_per_frame);
   ROS_INFO("  Max number of keypoints:    %i.", max_nof_keypoints);
@@ -703,6 +736,12 @@ int main(int argc, char** argv)
     {
       cv::namedWindow(MIPMAP_DEBUG_IMAGE_WINDOW);
     }
+  }
+  
+  // Open logfile
+  if(logging)
+  {
+    logfile.open("logfile.txt", std::fstream::app);
   }
   
   // Try to get OpenNI camera image size

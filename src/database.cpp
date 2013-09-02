@@ -28,6 +28,16 @@ thesis::ObjectClass Database::ObjectQueue::combined()
   o.width      /= confidence_sum;
   o.height     /= confidence_sum;
   
+  if(debug)
+  {
+    ROS_INFO("Database::ObjectQueue::combined(): ");
+    ROS_INFO("  confidence_sum = %f", confidence_sum);
+    ROS_INFO("  confidence     = %f", o.confidence);
+    ROS_INFO("  width          = %f", o.width);
+    ROS_INFO("  height         = %f", o.height);
+    std::cout << std::endl;
+  }
+  
   return o;
 }
 

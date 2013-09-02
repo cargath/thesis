@@ -101,13 +101,14 @@ bool SiftGPUDescriptorMatcher::match(const std::vector<float>& descriptors1,
       counter++;
     }
     // 
-    if(counter > 0.5 * nof_matches)
+    if(counter > 0.5 * (double) nof_matches)
     {
-      std::cout << "Counter:           " << counter           << std::endl;
-      std::cout << "NOF Matches:       " << nof_matches       << std::endl;
-      std::cout << "0.5 * NOF Matches: " << 0.5 * nof_matches << std::endl;
-      matches.clear();
+      ROS_DEBUG("Counter:           %i.", counter);
+      ROS_DEBUG("NOF Matches:       %i.", nof_matches);
+      ROS_DEBUG("0.5 * NOF Matches: %f.", 0.5 * (double) nof_matches);
       ROS_ERROR("SiftGPU Descriptor Matcher: Matches bad due to context error.");
+      std::cout << std::endl;
+      matches.clear();
       return false;
     }
     // 

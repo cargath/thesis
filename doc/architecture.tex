@@ -1,0 +1,185 @@
+\chapter{Architecture}
+
+The proposed system consists of several subsystems that run individually. Breaking up functionality into separate processes facilitates the integration of external applications to expand upon this work. For example, a user might want to use the system to create a semantic map but implement his own perception module in order to recognize different kinds of objects or to utilize other kinds of sensors.
+
+Since most of the subsystems depend on information from other subsystems, they need a way to communicate with each other. To this end they specify interfaces that determine which information they provide and which information they need. These interfaces are defined in such a way that each subsystem stands at a certain stage of the data flow where all previous stages are (directly or indirectly) mandatory for the subsystem to run while all succeeding stages are optional. The visualization for instance marks the last stage and therefore requires information from all other stages to run: It depends directly on the database and the semantic map (because it displays information from those stages) and indirectly on the perception (because the semantic map depends directly on the perception).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+    scale=0.75,
+    start chain=1 going below, 
+    start chain=2 going right,
+    node distance=1mm,
+    desc/.style={
+      scale=0.75,
+      on chain=2,
+      rectangle,
+      rounded corners,
+      draw=black, 
+      very thick,
+      text centered,
+      text width=8cm,
+      minimum height=12mm,
+      fill=black!12.5
+      },
+    level/.style={
+      scale=0.75,
+      on chain=1,
+      minimum height=12mm,
+      text width=2cm,
+      text centered
+    },
+    every node/.style={
+      font=\sffamily
+    }
+  ]
+    % Levels
+    \node [level] (Level 3) {Stage 3};
+    \node [level] (Level 2) {Stage 2};
+    \node [level] (Level 1) {Stage 1};
+    \node [level] (Level 0) {Stage 0};
+    % Descriptions
+    \chainin (Level 3);
+    \node [desc] (Vis) {Visualization};
+    \node [desc, continue chain=going below] (Map) {Semantic Map};
+    \node [desc] (Rec) {Perception};
+    \node [desc] (DB) {Database};
+  \end{tikzpicture}
+  \caption{Buildup order of subsystems}
+\end{figure}
+
+\section{Datatypes}
+Each object has two kinds of values: (1) Those that are the same for all objects of the same type and (2) those that are different for each instance. For example, all packs of cornflakes of one brand look the same and have the same dimensions, but they all have a different position. Analog to naming conventions in programming languages the first kind will be called \texttt{class attributes} and second \texttt{object attributes} in this document. \\
+
+This is not only a notional differentiation in the proposed system, it actually breaks up class attributes and object attributes into two classes. This allows different kinds of attributes to be handled by different parts of the system and changing class attributes without the need to update all instances of that class.
+
+\newpage
+\begin{center}
+  \renewcommand{\arraystretch}{1.5}
+  \begin{tabularx}{0.9\textwidth}{|R{0.5} | L{1.5}|}
+    \hline
+    \multicolumn{2}{|c|}{\textbf{Class Attributes}} \\
+    \hline
+    Type name     & The kind of object. Used not only to tell different types of objects apart, but also to identify the associated object attributes. \\
+    Texture image & A photo of the object. This image will be compared with the robots camera image in order to detect the associated type of object in the world. \\
+    Dimensions    & The width and height of an object in the real world. In combination with an objects position the width and height tell a robot where the object starts and ends, which is essential for the object to be grasped correctly. \\
+    Confidence    & Measurement for the reliabilty of the other values. If an object is recognized multiple times, the quality of its attributes can be improved by weighting more reliable data higher. \\
+    \hline
+  \end{tabularx}
+\end{center}
+
+\begin{center}
+  \renewcommand{\arraystretch}{1.5}
+  \begin{tabularx}{0.9\textwidth}{|R{0.5} | L{1.5}|}
+    \hline
+    \multicolumn{2}{|c|}{\textbf{Object Attributes}} \\
+    \hline
+    Type name            & The kind of object. Used to identify the associated class attributes. \\
+    Unique ID            & Instances need a unique ID in addition to their type in order to tell them apart. \\
+    Coordinate system ID & The coordinate system in which the objects position and orientation are specified. Objects are detected from the camera point of view but need to be placed in a static world coordinate system. \\
+    Position             & The position of the object. \\
+    Orientation          & The orientation of the object. \\
+    Confidence           & Measurement for the reliabilty of the other values. If an object is recognized multiple times, the quality of its attributes can be improved by weighting more reliable data higher. \\
+    \hline
+  \end{tabularx}
+\end{center}
+
+\newpage
+%\section{Interfaces}
+
+
+\section{Database}
+The database is the starting point for the system. The objects it is supposed to look out for are defined here, i.e. their name and the image required to detect them. Additionally the database manages the other class attributes that might change while the system is running. \\
+
+Several input services enable other subsystems to add new types of objects to the database. Since the dimensions will be calculated by the perception, only a name and an image of the object are required. The image may be given directly or as an URL pointing to an image file or a directory containing image files. If the sender chooses to provide a URL, then the object name is optional and the filename is used as a default.
+
+Whenever a new object is added to it, the database will broadcast a notification to the other subsystem, informing them about the addition. A subsystem using information from the database then would request the new list of objects if necessary and process it accordingly. \\
+
+Types of objects that have already been added to the database then can be accessed via a service which returns all objects currently existing in the database. If a subsystem knows the typename of the object it wants to access, there is another service which only returns the corresponding object. \\
+
+Since the database handles them too, it listens to what dimensions the perception calculates for successfully recognized objects. It uses this data to approximate an objects real dimensions, by computing an average over multiple occurences of the object and weighting them with their corresponding confidence. Note that it is not mandatory to make use of this interface. It does manage dimensions when provided, but is simply ignored otherwise.
+
+\section{Perception} % Dedicated subsection about OpenNI / RGB-D camera?
+The perception is responsible for processing camera images to detect objects and calculate their position. It requires a camera that provides color or grayscale images as well as depth images. \\
+
+Color or grayscale images are needed for the object detection. The perception compares each camera image to the image of each object in the database. If the image of an object occurs as part of the camera image, the depth image is required to calculate the 3D position of the occurence. To this end it is essential, that the image streams of the color / grayscale and depth images are synchronized, i.e. both images are provided for the same moment in time. Synchronization ensures that the information from the depth image can be attributed to the corresponding position in the color / grayscale image. \\
+
+Images from objects in the database need to be pre-processed in order to detect them in a camera image. Since images in the database rarely change, the perception can fetch all of them at once, process them and store the processed state (instead of processing them before every attempt to match them to the camera image). This means of course, that it needs to listen for changes to the database, because it needs to retrieve and process newly added objects. \\
+
+In order to communicate information about recognized objects to other subsystems, the perception provides three interfaces: It broadcasts (1) the objects dimensions, (2) the objects position and orientation and (3) the camera position and orientation from where the object was seen.
+
+The information is broadcast seperately, so that it can be processed by different subsystems without unnecessary overhead. In this work, (1) is handled by the database and (3) is handled by the semantic map. Note that (2) is not used in this work at all, but is already existing information that may be used in future work.
+
+The information is broadcast simultaneously though, because a user might want to implement different or additional subsystems that need to associate the various parts with each other.
+
+\section{Semantic Map}
+The semantic map handles objects recognized by the perception. This includes memorising the various instances of objects the robot comes across during his work, checking if memorized objects are still there, updating objects that changed since they were last seen and resolving conflicts that occur when multiple objects are detected at the same position. \\
+
+The semantic map listens to the object poses broadcast by the perception and compares them to the objects it already accumulated. If it already memorized an object of the same type at the same position, it assumes that it is dealing with the same object. In this case the previously calculated object pose can improved by computing the average of the existing and the new pose, weighted by how confident the perception was about these values.
+
+In order to check if two objects overlap, the semantic map needs to retrieve the dimensions associated with the type of object from the database. \\
+
+Objects memorized by the semantic map can be accessed via multiple interfaces that filter objects by the following categories: (1) All currently stored objects, (2) all objects of a specific type, (3) all objects within a given range around a specific position and (4) all objects inside the cameras current field of view.
+
+\section{Visualization}
+The visualization takes on the roll of a user who wants to work with the new information provided by the proposed system. It serves as an example on how to use the application, as well as providing a visual presentation of the internal state of the semantic map and related information from the database.
+
+\newpage
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+    ->,
+    scale=1.8,
+    auto,
+    swap,
+    vertex/.style={
+      rectangle,
+      rounded corners,
+      fill=black!12.5,
+      draw=black,
+      very thick,
+      text centered,
+      text width=3cm,
+      minimum height=9mm,
+      font=\sffamily
+    },
+    edge/.style={
+      draw,
+      thick,
+      line width=1.5pt,
+      inner sep=3pt,
+      outer sep=3pt,
+      font=\sffamily,
+    },
+    container/.style={
+      circle,
+      fill=black!5,
+      minimum size=100pt,
+      inner sep=0pt
+    }
+  ]
+    % Background
+    %\fill [container] (-1.5, 7.25) rectangle (6.5, 1.75);
+    % Draw the vertices.
+    \node [vertex] (e) {RGB-D Camera};
+    \node [vertex] (b) [below       = 1.25cm        of e] {Perception};
+    \node [vertex] (a) [below left  = 2cm and 0.5cm of b] {Database};
+    \node [vertex] (c) [below right = 2cm and 0.5cm of b] {Semantic Map};
+    \node [vertex] (d) [below right = 2cm and 0.5cm of a] {Visualization};
+    % Database <-> Perception.
+    \path [edge] (a) edge [bend left] node [left] {class attributes} (b);
+    \path [edge] (b) edge [bend left] node [right] {class attributes} (a);
+    % Perception -> Semantic Map.
+    \path [edge] (b) edge [] node [right] {object attributes} (c);
+    % Database -> Semantic Map.
+    \path [edge] (a) edge [] node [] {class attributes} (c);
+    % Database -> Visualization.
+    \path [edge] (a) edge [] node [left] {class attributes} (d);
+    % Semantic Map -> Visualization.
+    \path [edge] (c) edge [] node [right] {object attributes} (d);
+    % Kinect -> Perception
+    \path [edge] (e) edge [] node [] {RGB \& depth images} (b);
+  \end{tikzpicture}
+  \caption{Data flow between individual parts of the system}
+\end{figure}

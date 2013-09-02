@@ -267,7 +267,7 @@ int main(int argc, char** argv)
   }
   
   // Create sample database
-  database = Database(memory_size);
+  database = Database(memory_size, debug);
   std::vector<cv::Mat> images;
   std::vector<std::string> filenames;
   image_loader.load_directory(image_path, images, filenames);

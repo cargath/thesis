@@ -38,11 +38,11 @@ double SemanticMap::EvaluationComparator::evaluate
   double y = 0.5 - atan(x*2.5 -5) / M_PI;
   
   //
-  std::cout << "SemanticMap::evaluate()"      << std::endl;
-  std::cout << "  Time:        "         << t << std::endl;
-  std::cout << "  Distance:    "         << d << std::endl;
-  std::cout << "  Match Ratio: "         << c << std::endl;
-  std::cout                                   << std::endl;
+  //std::cout << "SemanticMap::evaluate()"      << std::endl;
+  //std::cout << "  Time:        "         << t << std::endl;
+  //std::cout << "  Distance:    "         << d << std::endl;
+  //std::cout << "  Match Ratio: "         << c << std::endl;
+  //std::cout                                   << std::endl;
   
   //
   return y;

@@ -18,7 +18,7 @@ class Database
     /**
      * Default constructor.
      */
-    Database(const int memory_size=0) : memory_size(memory_size)
+    Database(const int memory_size=0, const bool debug=false) : memory_size(memory_size), debug(debug)
     {
       //
     }
@@ -87,7 +87,7 @@ class Database
         /**
          * Default constructor.
          */
-        ObjectQueue(const int memory_size=0) : memory_size(memory_size)
+        ObjectQueue(const int memory_size=0, const bool debug=false) : memory_size(memory_size), debug(debug)
         {
           //
           ROS_DEBUG("Database::ObjectQueue(%i);", memory_size);
@@ -121,6 +121,11 @@ class Database
          * Maximum number of values to store for averaging.
          */
         int memory_size;
+        
+        /**
+         *
+         */
+        bool debug;
     };
   
     /**
@@ -148,6 +153,11 @@ class Database
      * Maximum number of values to store per entry for averaging.
      */
     int memory_size;
+    
+    /**
+     *
+     */
+    bool debug;
 };
 
 #endif //__DATABASE__

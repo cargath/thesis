@@ -51,6 +51,19 @@ inline float angle2f(cv::Point2f dir1, cv::Point2f dir2)
   return acos(dot2f(dir1, dir2) / (mag2f(dir1) * mag2f(dir2)));
 }
 
+inline cv::Point2f centroid2f(const std::vector<cv::Point2f>& v)
+{
+  cv::Point2f c;
+  for(size_t i = 0; i < v.size(); i++)
+  {
+    c.x += v[i].x;
+    c.y += v[i].y;
+  }
+  c.x /= v.size();
+  c.y /= v.size();
+  return c;
+}
+
 bool insideConvexPolygon(const std::vector<cv::Point2f>& corners,
                          const cv::Point2f& p);
 

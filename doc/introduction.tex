@@ -1,0 +1,19 @@
+\chapter{Introduction}
+In the field of robotics, the most common task beyond pure observation is to find the mission objective. It is an integral part of almost everything a robot that interacts with its environment does, because it first needs to know where things are in order to manipulate them. It has to move and look around for every item it is going to use everytime before doing anything else. This only works well when operating in small areas a robot can cover relatively fast. In larger areas search can quickly become the activity that the robot spends most of its time on. \\
+
+One solution is to define a location for every object the robot has to deal with, which then can be provided with a list of these locations, thus enabling it to simply look up its objectives position and eliminating the need for search completely. This approach is often employed in static environments. A common use-case is a warehouse, which is already organised in a way that all of its contents have their specific place.
+
+While this approach is much faster than searching for everything as needed, it is also very unflexible. It requires a complex setup and previous knowledge about the domain the robot is going to work in. It is unable to deal with dynamic changes to the world, like objects changing their position, unless the user keeps manually entering information. \\
+
+The goal of this work is to create method that enables a robot to quickly find objects while retaining the flexibility of a dynamic approach. It will need to be able to recognize objects that might become relevant in the future and remember their position, creating a map of its environment which is able to reflect changes to the world.
+
+In order to accomplish this goal, the robot will still need to be provided with a list of potentially interesting objects. The difference is, that this list has to contain some basic information needed to identify these objects (i.e. how they look) only. This information will not change over time and therefore does not require maintenance.
+
+While the robot is executing other tasks, it can watch out for the more prominent features of given objects. In order not to interfere with its current assignment, the robot will only investigate further if something comes up in this process. Successfully recognized objects will be memorized in association with their position. Then, when a specific object is needed, the robot knows where the nearest one is most likely to be found. \\
+
+The system will be tested and presented in a shopping scenario, where a robot is supposed to find objects from a shopping list in a supermarket. A shopping scenario is a good example to illustrate the benefits of the method proposed in this work, because a supermarket does arrange goods by grouping them by category and keeps them in roughly the same place over longer periods of time, but it does not provide a list of specific locations for third-parties to use to locate objects. Maintaining a list of locations for a shopping robot manually would require a lot of work, because supermarkets tend to switch things around slightly. \\
+
+Since perceiving arbitrary objects is a whole field of study on its own, this work will focus on packaged supermarket goods, which is sufficient in the context of this scenario as well as for the purpose of demonstrating the method at hand.
+
+\section{Structure}
+%TODO

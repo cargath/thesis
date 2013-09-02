@@ -193,9 +193,9 @@ void mark_as_visible(thesis::ObjectInstance object)
   // Setup the values only viable for this type of markers
   object_marker.id      = unique_marker_id++;
   object_marker.type    = visualization_msgs::Marker::TEXT_VIEW_FACING;
-  object_marker.scale.x = 0.11;
-  object_marker.scale.y = 0.11;
-  object_marker.scale.z = 0.11;
+  object_marker.scale.x = 0.1;
+  object_marker.scale.y = 0.1;
+  object_marker.scale.z = 0.1;
   object_marker.color.r = 0.0;
   object_marker.color.g = 1.0;
   object_marker.color.b = 0.0;
@@ -220,7 +220,7 @@ int main(int argc, char** argv)
   std::cout << std::endl;
   
   // Get local parameters
-  nh_private.param("debug", debug, false);
+  nh_private.param("debug", debug, true);
   
   ROS_INFO("Visualization (local parameters): ");
   ROS_INFO("  Debug mode: %s.", debug ? "true" : "false");
@@ -241,38 +241,8 @@ int main(int argc, char** argv)
   {
     // Remove previously published markers
     clear_markers();
-    // Get all objects from semantic map
-    thesis::MappingGetAll map_get_all_service;
-    if(map_get_all_client.call(map_get_all_service))
-    {
-      // Add identity pose (for verifying axis-arrow markers)
-      if(debug)
-      {
-        thesis::ObjectInstance msg;
-        msg.type_id = "Identity";
-        msg.pose_stamped.header.stamp       = ros::Time::now();
-        msg.pose_stamped.header.frame_id    = map_frame;
-        msg.pose_stamped.pose.position.x    = 0;
-        msg.pose_stamped.pose.position.y    = 0;
-        msg.pose_stamped.pose.position.z    = 0;
-        tf::quaternionTFToMsg(IDENTITY_QUATERNION, msg.pose_stamped.pose.orientation);
-        map_get_all_service.response.objects.push_back(msg);
-      }
-      // Create various markers for every object
-      for(size_t i = 0; i < map_get_all_service.response.objects.size(); i++)
-      {
-        create_markers(map_get_all_service.response.objects[i]);
-      }
-    }
-    else
-    {
-      ROS_WARN("Visualization: ");
-      ROS_WARN("  Failed to call service 'thesis_mapping/all'.");
-      ROS_WARN("  Unable to visualize the semantic map.");
-      std::cout << std::endl;
-    }
     // Get currently visible objects from semantic map
-    thesis::MappingGetVisible map_get_visible_service;
+    /*thesis::MappingGetVisible map_get_visible_service;
     if(map_get_visible_client.call(map_get_visible_service))
     {
       // Create additional markers for currently visible objects
@@ -286,6 +256,43 @@ int main(int argc, char** argv)
       ROS_WARN("Visualization: ");
       ROS_WARN("  Failed to call service 'thesis_mapping/visible'.");
       ROS_WARN("  Unable to visualize currently visible objects.");
+      std::cout << std::endl;
+    }*/
+    // Get all objects from semantic map
+    thesis::MappingGetAll map_get_all_service;
+    if(map_get_all_client.call(map_get_all_service))
+    {
+      // Add identity pose (for verifying axis-arrow markers)
+      if(debug)
+      {
+        thesis::ObjectInstance msg;
+        msg.type_id = "Identity";
+        msg.pose_stamped.header.stamp    = ros::Time::now();
+        msg.pose_stamped.header.frame_id = map_frame;
+        msg.pose_stamped.pose.position.x = 0;
+        msg.pose_stamped.pose.position.y = 0;
+        msg.pose_stamped.pose.position.z = 0;
+        tf::quaternionTFToMsg(IDENTITY_QUATERNION, msg.pose_stamped.pose.orientation);
+        map_get_all_service.response.objects.push_back(msg);
+      }
+      // Create various markers for every object
+      for(size_t i = 0; i < map_get_all_service.response.objects.size(); i++)
+      {
+        create_markers(map_get_all_service.response.objects[i]);
+        //
+        if(debug)
+        {
+          ROS_INFO("Visualization: ");
+          ROS_INFO("  Creating markers for %s.", map_get_all_service.response.objects[i].type_id.c_str());
+          std::cout << std::endl;
+        }
+      }
+    }
+    else
+    {
+      ROS_WARN("Visualization: ");
+      ROS_WARN("  Failed to call service 'thesis_mapping/all'.");
+      ROS_WARN("  Unable to visualize the semantic map.");
       std::cout << std::endl;
     }
     // Publish visualization markers

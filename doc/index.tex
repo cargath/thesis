@@ -1,47 +1,45 @@
 \documentclass[11pt, twoside, a4paper]{report}
 
+\usepackage{amsmath}
+
 \usepackage{float}
 
 \usepackage{verbatim}
 \usepackage{tikz}
-\usetikzlibrary{arrows,shapes}
-\tikzstyle{container} = [circle, fill=black!12.5, minimum size=100pt, inner sep=0pt]
-\tikzstyle{vertex} = [circle, fill=black!25, minimum size=100pt, inner sep=0pt]
-\tikzstyle{edge} = [draw, thick, line width=1.5pt, inner sep=5pt, outer sep=5pt]
+\usetikzlibrary{arrows, shapes, chains}
+
+\usepackage{tabularx}
+\newcolumntype{L}[1]{>{\hsize=#1\hsize\raggedright\arraybackslash}X}
+\newcolumntype{R}[1]{>{\hsize=#1\hsize\raggedleft\arraybackslash}X}
+\newcolumntype{C}[2]{>{\hsize=#1\hsize\columncolor{#2}\centering\arraybackslash}X}
 
 \begin{document}
 
-\title{\textbf{Perceiving and memorising packaged goods in a supermarket environment} \vspace{7.5mm} \\ \textsc{Diploma Thesis}}
-\author{Universit\"at Bremen \\ Fachbereich 3: Mathematik und Informatik \vspace{3.5mm} \\ Carsten K\"onemann \\ Matrikel-Nr.: 2261713}
-\date{08.10.2013}
+  \title{\textbf{Perceiving and memorising packaged goods in a supermarket environment} \vspace{7.5mm} \\ \textsc{Diploma Thesis}}
+  \author{Universit\"at Bremen \\ Fachbereich 3: Mathematik und Informatik \vspace{3.5mm} \\ Carsten K\"onemann \\ Matrikel-Nr.: 2261713}
+  \date{08.10.2013}
 
-\maketitle
+  \maketitle
 
-\chapter*{Abstract}
+  \chapter*{Abstract}
 
+  \tableofcontents
 
-\tableofcontents
+  \input{introduction.tex}
 
-\input{introduction.tex}
+  \input{architecture.tex}
 
-\input{architecture.tex}
+  \input{implementation.tex}
 
-\input{implementation.tex}
+  \chapter{Analysis}
+  \section{Experimentation}
+  \section{Results}
+  \section{Evaluation}
 
+  \chapter{Discussion}
 
-\chapter{Analysis}
-\section{Experimentation}
-\section{Results}
-\section{Evaluation}
+  \chapter{Conclusion}
 
-
-\chapter{Discussion}
-
-
-\chapter{Conclusion}
-
-
-\chapter{Future Work / Outlook}
-
+  \chapter{Future Work / Outlook}
 
 \end{document}
