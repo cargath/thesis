@@ -13,39 +13,20 @@ double SemanticMap::EvaluationComparator::evaluate
   cv::Point3f p_c
 )
 {
-  // TODO
-  
-  // Time
+  // Time passed since the object was recognized in seconds
   double t = (ros::Time::now() - object.pose_stamped.header.stamp).toSec();
+  //
+  double x = 0.5 - atan(t*0.005 -5) / M_PI;
   
   // Object position
   cv::Point3f p_o = ros2cv3f(object.pose_stamped.pose.position);
-  // Distance
+  // Distance in meters
   double d = dist3f(p_c, p_o);
-  
-  // Confidence
-  // - seen for how many consecutive frames
-  // - ratio of matching keypoints on average
-  double c = object.confidence;
-  
-  // Combined (weighted average)
-  
-  
-  // x
-  double x = 0.5;
-  
-  // y
-  double y = 0.5 - atan(x*2.5 -5) / M_PI;
-  
   //
-  //std::cout << "SemanticMap::evaluate()"      << std::endl;
-  //std::cout << "  Time:        "         << t << std::endl;
-  //std::cout << "  Distance:    "         << d << std::endl;
-  //std::cout << "  Match Ratio: "         << c << std::endl;
-  //std::cout                                   << std::endl;
-  
+  double y = 0.5 - atan(d*0.4 -5) / M_PI;
+
   //
-  return y;
+  return (x + 2*y) / 3;
 }
 
 boost::uuids::uuid SemanticMap::ObjectQueue::getID()
@@ -97,6 +78,15 @@ thesis::ObjectInstance SemanticMap::ObjectQueue::combined()
       //
       if(!isnan(current.pose_stamped.pose.orientation))
       {
+        normalize_quaternion_msg(current.pose_stamped.pose.orientation);
+        o.pose_stamped.pose.orientation.x
+          += current.pose_stamped.pose.orientation.x;// * current.confidence;
+        o.pose_stamped.pose.orientation.y
+          += current.pose_stamped.pose.orientation.y;// * current.confidence;
+        o.pose_stamped.pose.orientation.z
+          += current.pose_stamped.pose.orientation.z;// * current.confidence;
+        o.pose_stamped.pose.orientation.w
+          += current.pose_stamped.pose.orientation.w;// * current.confidence;
         // Quaternion message to TF quaternion
         tf::Quaternion quaternion_tf;
         tf::quaternionMsgToTF(
@@ -121,12 +111,23 @@ thesis::ObjectInstance SemanticMap::ObjectQueue::combined()
     o.pose_stamped.pose.position.y /= confidence_sum;
     o.pose_stamped.pose.position.z /= confidence_sum;
     
+    o.pose_stamped.pose.orientation.x /= deque.size();
+    o.pose_stamped.pose.orientation.y /= deque.size();
+    o.pose_stamped.pose.orientation.z /= deque.size();
+    o.pose_stamped.pose.orientation.w /= deque.size();
+    /*o.pose_stamped.pose.orientation.x /= confidence_sum;
+    o.pose_stamped.pose.orientation.y /= confidence_sum;
+    o.pose_stamped.pose.orientation.z /= confidence_sum;
+    o.pose_stamped.pose.orientation.w /= confidence_sum;*/
+    
+    normalize_quaternion_msg(o.pose_stamped.pose.orientation);
+    
     yaw_sum   /= orientation_confidence_sum;
     pitch_sum /= orientation_confidence_sum;
     roll_sum  /= orientation_confidence_sum;
     
-    o.pose_stamped.pose.orientation
-      = tf::createQuaternionMsgFromRollPitchYaw(roll_sum, pitch_sum, yaw_sum);
+    //o.pose_stamped.pose.orientation
+    //  = tf::createQuaternionMsgFromRollPitchYaw(roll_sum, pitch_sum, yaw_sum);
   }
   else
   {
@@ -261,7 +262,13 @@ bool SemanticMap::add
   if(debug)
   {
     ROS_INFO("SemanticMap::add(%s, %f): ", object.type_id.c_str(), min_distance);
-    ROS_INFO("  Object position: (%f, %f, %f).", p.x, p.y, p.z);
+    ROS_INFO("  Object position:    (%f, %f, %f).", p.x, p.y, p.z);
+    ROS_INFO("  Object orientation: (%f, %f, %f, %f).",
+      object.pose_stamped.pose.orientation.x,
+      object.pose_stamped.pose.orientation.y,
+      object.pose_stamped.pose.orientation.z,
+      object.pose_stamped.pose.orientation.w
+    );
   }
   // Check for already stored objects of the same type
   std::vector<std::vector<ObjectQueue>::iterator> existing_objects;

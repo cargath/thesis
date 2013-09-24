@@ -4,6 +4,7 @@
 
 // This is a ROS project
 #include <ros/ros.h>
+#include <ros/package.h>
 
 // We are working with OpenCV
 #include <cv_bridge/cv_bridge.h>
@@ -13,6 +14,7 @@
 // Local headers
 #include <thesis/math2d.h>
 #include <thesis/math3d.h>
+#include <thesis/timestring.h>
 #include <thesis/object_recognizer.h>
 
 // We want to subscribe to multiple topics with one callback
@@ -39,7 +41,7 @@
 // FPS counter for debugging purposes
 #include <thesis/fps_calculator.h>
 
-// Filestream for logging
+// C++ std libraries
 #include <fstream>
 
 using namespace sensor_msgs;
@@ -77,7 +79,8 @@ double      openni_timeout,
             knn_1to2_ratio;
 
 // Logfile
-std::fstream logfile;
+std::ofstream logfile,
+              fpsfile;
 
 // We try to get the image size of a connected OpenNI camera (if available)
 bool openni_once = false;
@@ -202,11 +205,33 @@ inline geometry_msgs::Quaternion quaternion_from_plane(cv::Point3f w, cv::Point3
 {
   // Get the surface normal of the plane defined by w and h
   // If we can see an object, it is obviously facing the camera (thus the negation)
-  cv::Point3f n = -surfaceNormal3f(w, h);
+  cv::Point3f n = surfaceNormal3f(w, h);
+  
   // Convert direction vector (surface normal) to Euler angles
-  cv::Point3f ypr = getYPR(n, h);
+  //cv::Point3f ypr = getYPR(n, w);
+  
   // Convert Euler angles to quaternion
-  return tf::createQuaternionMsgFromRollPitchYaw(ypr.z, ypr.y, ypr.x);
+  //if(ypr.x < 0) ypr.x += M_PI;
+  //if(ypr.y < 0) ypr.y += M_PI;
+  //if(ypr.z < 0) ypr.z += M_PI;
+  
+  //tf::Quaternion roll = tf::createQuaternionFromRPY(0, 0, -ypr.z);
+  //tf::quaternionTFToMsg(roll, msg);
+  
+  tf::Vector3 axis_vector(n.x, n.y, n.z);
+  
+  tf::Vector3 up_vector(0.0, 0.0, 1.0);
+  
+  tf::Vector3 right_vector = axis_vector.cross(up_vector);
+  right_vector.normalized();
+  
+  tf::Quaternion quat(right_vector, -1.0 * acos(axis_vector.dot(up_vector)));
+  quat.normalize();
+  
+  geometry_msgs::Quaternion orientation;
+  tf::quaternionTFToMsg(quat, orientation);
+  
+  return orientation;
 }
 
 inline bool draw_rectangle(const std::vector<cv::Point2f>& corners,
@@ -299,7 +324,7 @@ inline void publish_object(const Finding& finding,
     }
   }
   // Get object position in camera coordinate space
-  if(!isnan(finding_centroid_depth) || finding_centroid_depth != 0)
+  if(!isnan(finding_centroid_depth) && finding_centroid_depth != 0)
   {
     // Project object centroid to camera coordinate space
     cv::Point3f camera_coordinate = camera_model.projectPixelTo3dRay(finding_centroid);
@@ -351,7 +376,7 @@ inline void publish_object(const Finding& finding,
   // Get object orientation & dimensions in camera coordinate space
   if(!isnan(w) && !isnan(h))
   {
-    ROS_INFO("Perception: !isnan(w) && !isnan(h) == true");
+    ROS_DEBUG("Perception: !isnan(w) && !isnan(h) == true");
     // Compute object orientation
     msg_object_pose.pose_stamped.pose.orientation = quaternion_from_plane(w, h);
     // Compute object dimensions
@@ -360,7 +385,7 @@ inline void publish_object(const Finding& finding,
   }
   else
   {
-    ROS_INFO("Perception: !isnan(w) && !isnan(h) == false");
+    ROS_DEBUG("Perception: !isnan(w) && !isnan(h) == false");
     // Fill object pose message
     msg_object_pose.pose_stamped.pose.orientation.x = NAN;
     msg_object_pose.pose_stamped.pose.orientation.y = NAN;
@@ -603,6 +628,11 @@ void callback_openni(const sensor_msgs::Image::ConstPtr& rgb_input,
   // Print FPS to debug image
   if(debug)
   {
+    // Log FPS
+    if(logging && fpsfile.is_open())
+    {
+      fpsfile << fps_calculator.get_fps() << "\n";
+    }
     // Create string
     std::stringstream stream;
     stream << "FPS: " << fps_calculator.get_fps();
@@ -635,8 +665,6 @@ void callback_openni(const sensor_msgs::Image::ConstPtr& rgb_input,
   thesis::ObjectInstanceArray msgs_object_pose,
                               msgs_camera_pose;
   thesis::ObjectClassArray    msgs_object_meta;
-  // Line to append to logfile
-  std::stringstream log_current;
   // Update current camera model in order to project 2D pixel to 3D ray
   camera_model.fromCameraInfo(cam_info_input);
   // Publish objects
@@ -659,17 +687,35 @@ void callback_openni(const sensor_msgs::Image::ConstPtr& rgb_input,
     msgs_object_pose.array.push_back(msg_object_pose);
     msgs_camera_pose.array.push_back(msg_camera_pose);
     msgs_object_meta.array.push_back(msg_object_meta);
-    //
-    log_current << findings[i].type_id << ",";
   }
   // Publish messages
   object_pose_publisher.publish(msgs_object_pose);
   camera_pose_publisher.publish(msgs_camera_pose);
   object_meta_publisher.publish(msgs_object_meta);
-  // Append line to logfile
-  if(logging)
+  // Log findings
+  if(logging && logfile.is_open())
   {
-    logfile << log_current;
+    std::map<std::string, Sample>::iterator db_iter = database_processed.begin();
+    for(; db_iter != database_processed.end(); db_iter++)
+    {
+      bool type_found = false;
+      for(size_t i = 0; i < findings.size(); i++)
+      {
+        if(findings[i].type_id.compare(db_iter->first) == 0)
+        {
+          type_found = true;
+        }
+      }
+      if(type_found)
+      {
+        logfile << "1 ";
+      }
+      else
+      {
+        logfile << "0 ";
+      }
+    }
+    logfile << "\n";
   }
 }
 
@@ -738,12 +784,6 @@ int main(int argc, char** argv)
     }
   }
   
-  // Open logfile
-  if(logging)
-  {
-    logfile.open("logfile.txt", std::fstream::app);
-  }
-  
   // Try to get OpenNI camera image size
   ros::Subscriber camera_info_once_subscriber = nh.subscribe(camera_info_topic, 1, callback_openni_once);
   ros::Time wait_time = ros::Time::now();
@@ -765,6 +805,60 @@ int main(int argc, char** argv)
   
   // Create image database
   reset(mipmap_level);
+  
+  // Open logfiles
+  if(logging)
+  {
+    // Create logfile names
+    std::stringstream logpath, fpspath;
+    // Path to this package
+    logpath << ros::package::getPath("thesis");
+    logpath << "/log/perceptions_";
+    fpspath << ros::package::getPath("thesis");
+    fpspath << "/log/fps_";
+    // Current time and date
+    std::string current_time = std::string(timestring::get_timestring());
+    logpath << current_time;
+    fpspath << current_time;
+    // File extension
+    logpath << ".log";
+    fpspath << ".log";
+    // Open perceptions logfile
+    ROS_INFO("Perception: ");
+    logfile.open(logpath.str().c_str(), std::ofstream::out | std::ofstream::app);
+    if(logfile.is_open())
+    {
+      // Create header for logfile
+      logfile << "# Has an object of type XY been seen during a frame? \n";
+      logfile << "#   0 if not \n";
+      logfile << "#   1 if yes \n";
+      logfile << "# These objects exist in the database: \n";
+      logfile << "# ";
+      std::map<std::string, Sample>::iterator db_iter = database_processed.begin();
+      for(; db_iter != database_processed.end(); db_iter++)
+      {
+        logfile << db_iter->first << " ";
+      }
+      logfile << "\n";
+      // Debug output
+      ROS_INFO("  Successfully opened logfile '%s'.", logpath.str().c_str());
+    }
+    else
+    {
+      ROS_INFO("  Unable to open logfile '%s'.", logpath.str().c_str());
+    }
+    // Open fps logfile
+    fpsfile.open(fpspath.str().c_str(), std::ofstream::out | std::ofstream::app);
+    if(fpsfile.is_open())
+    {
+      ROS_INFO("  Successfully opened logfile '%s'.", fpspath.str().c_str());
+    }
+    else
+    {
+      ROS_INFO("  Unable to open logfile '%s'.", fpspath.str().c_str());
+    }
+    std::cout << std::endl;
+  }
 
   // Subscribe to relevant OpenNI topics
   Subscriber<Image>      rgb_subscriber(nh, rgb_image_topic, 1);
@@ -804,6 +898,18 @@ int main(int argc, char** argv)
     {
       cv::destroyWindow(MIPMAP_DEBUG_IMAGE_WINDOW);
     }
+  }
+  
+  // Close logfiles
+  if(logging && logfile.is_open())
+  {
+    logfile.flush();
+    logfile.close();
+  }
+  if(logging && fpsfile.is_open())
+  {
+    fpsfile.flush();
+    fpsfile.close();
   }
   
   // Exit with success

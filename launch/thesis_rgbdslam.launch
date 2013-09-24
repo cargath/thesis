@@ -4,17 +4,12 @@
     thesis/rgb_image_topic:   'camera/rgb/image_rect_color'
     thesis/depth_image_topic: 'camera/depth_registered/image_rect'
     thesis/camera_info_topic: 'camera/depth_registered/camera_info'
-    thesis/camera_frame:      '/camera_rgb_optical_frame' <!-- /head_mount_kinect_rgb_optical_frame -->
+    thesis/camera_frame:      '/camera_link' <!-- /head_mount_kinect_rgb_optical_frame -->
     thesis/map_frame:         '/map'
     thesis/tf_timeout:        0.5
     thesis/openni_timeout:    5.0
     thesis/memory_size:       64
   </rosparam>
-
-  <!-- Camera coordinates, 30fps -->
-  <!--node pkg="tf" type="static_transform_publisher" name="rgb_frame_kinect" args="0 0 0 0 0 0 /map /head_mount_kinect_rgb_optical_frame 33"/-->
-  <!-- node pkg="tf" type="static_transform_publisher" name="rgb_frame_kinect"         args="0 0 0 0 0 0 /map /camera_rgb_frame 33"/-->
-  <node pkg="tf" type="static_transform_publisher" name="rgb_optical_frame_kinect" args="0 0 0 0 0 0 /map /camera_rgb_optical_frame 33"/>
 
   <!-- Database -->
   <node pkg="thesis" type="init_database" name="thesis_database" output="screen">
@@ -25,7 +20,7 @@
   <!-- Perception -->
   <node pkg="thesis" type="init_recognition" name="thesis_recognition" output="screen">
     <param name="debug"                 type="bool"   value="true"/>
-    <param name="logging"               type="bool"   value="false"/>
+    <param name="logging"               type="bool"   value="true"/>
     <param name="mipmap_level"          type="int"    value="1"/>
     <param name="max_objects_per_frame" type="int"    value="5"/>
     <param name="max_nof_keypoints"     type="int"    value="256"/>
@@ -40,13 +35,12 @@
   <!-- Semantic map -->
   <node pkg="thesis" type="init_mapping" name="thesis_mapping" output="screen">
     <param name="debug"             type="bool"   value="false"/>
-    <param name="logging"           type="bool"   value="true"/>
     <param name="age_threshold"     type="double" value="2.0"/>
     <param name="min_confirmations" type="int"    value="3"/>
   </node>
   
   <!-- Visualisation -->
   <node pkg="thesis" type="init_visualization" name="thesis_visualization" output="screen">
-    <param name="debug" type="bool" value="true"/>
+    <param name="debug" type="bool" value="false"/>
   </node>
 </launch>

@@ -76,6 +76,10 @@ bool callback_add_urls(thesis::DatabaseAddURL::Request& request,
       }
     }
   }
+  //
+  std_msgs::Empty msg;
+  update_publisher.publish(msg);
+  //
   return true;
 }
 
@@ -100,6 +104,10 @@ bool callback_add_files(thesis::DatabaseAddFile::Request& request,
       }
     }
   }
+  //
+  std_msgs::Empty msg;
+  update_publisher.publish(msg);
+  //
   return true;
 }
 
@@ -110,6 +118,10 @@ bool callback_add_images(thesis::DatabaseAddImg::Request& request,
   {
     database.add_image(request.images[i], request.names[i], min_image_size, max_image_size);
   }
+  //
+  std_msgs::Empty msg;
+  update_publisher.publish(msg);
+  //
   return true;
 }
 
@@ -140,7 +152,7 @@ bool callback_get_by_type(thesis::DatabaseGetByID::Request& request,
     thesis::ObjectClass identity;
     identity.type_id = "Identity";
     identity.width   = 0.1;
-    identity.height  = 0.1;
+    identity.height  = 0.2;
     result.object_class = identity;
     return true;
   }
@@ -284,7 +296,7 @@ int main(int argc, char** argv)
   ros::ServiceServer srv_get_all     = nh_private.advertiseService("get_all",     callback_get_all);
   ros::ServiceServer srv_get_by_type = nh_private.advertiseService("get_by_type", callback_get_by_type);
   
-  // SUbscribe to updates on object metadata (e.g. perceived dimensions)
+  // Subscribe to updates on object metadata (e.g. perceived dimensions)
   ros::Subscriber object_meta_subscriber = nh.subscribe("thesis_recognition/object_dimension", 1, callback_object_dimension);
   
   // We are going to inform subscribing nodes about changes

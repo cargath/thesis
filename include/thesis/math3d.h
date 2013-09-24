@@ -17,25 +17,6 @@ static const tf::Quaternion IDENTITY_QUATERNION = tf::createIdentityQuaternion()
 
 
 /**
- * Quaternions.
- */
-
-inline bool isnan(geometry_msgs::Quaternion q)
-{
-  return isnan(q.x * q.y * q.z * q.w);
-}
-
-inline void normalize_quaternion_msg(geometry_msgs::Quaternion& q)
-{
-  double m = sqrt(q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w);
-  q.x = q.x / m;
-  q.y = q.y / m;
-  q.z = q.z / m;
-  q.w = q.w / m;
-}
-
-
-/**
  * Points.
  */
 
@@ -171,5 +152,80 @@ inline cv::Point3f surfaceNormal3f(const cv::Point3f a, const cv::Point3f b)
 }
 
 cv::Point3f getYPR(const cv::Point3f forward, const cv::Point3f up);
+
+
+/**
+ * Quaternions.
+ */
+
+inline bool isnan(geometry_msgs::Quaternion q)
+{
+  return isnan(q.x * q.y * q.z * q.w);
+}
+
+inline void normalize_quaternion_msg(geometry_msgs::Quaternion& q)
+{
+  double m = sqrt(q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w);
+  q.x = q.x / m;
+  q.y = q.y / m;
+  q.z = q.z / m;
+  q.w = q.w / m;
+}
+
+inline void matrix2quaternion3f(geometry_msgs::Quaternion& q,
+                               float m00, float m01, float m02,
+                               float m10, float m11, float m12,
+                               float m20, float m21, float m22)
+{
+  float trace = m00 + m11 + m22; // I removed + 1.0f; see discussion with Ethan
+  if(trace > 0)
+  { // I changed M_EPSILON to 0
+    float s = 0.5f / sqrtf(trace + 1.0f);
+    q.w = 0.25f / s;
+    q.x = (m21 - m12) * s;
+    q.y = (m02 - m20) * s;
+    q.z = (m10 - m01) * s;
+  }
+  else
+  {
+    if(m00 > m11 && m00 > m22)
+    {
+      float s = 2.0f * sqrtf(1.0f + m00 - m11 - m22);
+      q.w = (m21 - m12) / s;
+      q.x = 0.25f * s;
+      q.y = (m01 + m10) / s;
+      q.z = (m02 + m20) / s;
+    }
+    else if(m11 > m22)
+    {
+      float s = 2.0f * sqrtf(1.0f + m11 - m00 - m22);
+      q.w = (m02 - m20) / s;
+      q.x = (m01 + m10) / s;
+      q.y = 0.25f * s;
+      q.z = (m12 + m21) / s;
+    }
+    else
+    {
+      float s = 2.0f * sqrtf(1.0f + m22 - m00 - m11);
+      q.w = (m10 - m01) / s;
+      q.x = (m02 + m20) / s;
+      q.y = (m12 + m21) / s;
+      q.z = 0.25f * s;
+    }
+  }
+}
+
+inline void directions2quaternion3f(geometry_msgs::Quaternion& q,
+                                    const cv::Point3f forward,
+                                    const cv::Point3f up)
+{
+  //
+  cv::Point3f side = cross3f(forward, up);
+  cv::Point3f up_  = cross3f(forward, side);
+  //
+  matrix2quaternion3f(q, side.x,    side.y,    side.z,
+                         up_.x,     up_.y,     up_.z,
+                         forward.x, forward.y, forward.z);
+}
 
 #endif //__MATH3D__

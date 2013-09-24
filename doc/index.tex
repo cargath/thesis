@@ -1,17 +1,4 @@
-\documentclass[11pt, twoside, a4paper]{report}
-
-\usepackage{amsmath}
-
-\usepackage{float}
-
-\usepackage{verbatim}
-\usepackage{tikz}
-\usetikzlibrary{arrows, shapes, chains}
-
-\usepackage{tabularx}
-\newcolumntype{L}[1]{>{\hsize=#1\hsize\raggedright\arraybackslash}X}
-\newcolumntype{R}[1]{>{\hsize=#1\hsize\raggedleft\arraybackslash}X}
-\newcolumntype{C}[2]{>{\hsize=#1\hsize\columncolor{#2}\centering\arraybackslash}X}
+\documentclass{thesis}
 
 \begin{document}
 
@@ -31,15 +18,20 @@
 
   \input{implementation.tex}
 
-  \chapter{Analysis}
-  \section{Experimentation}
-  \section{Results}
-  \section{Evaluation}
+  \input{analysis.tex}
 
   \chapter{Discussion}
 
   \chapter{Conclusion}
 
-  \chapter{Future Work / Outlook}
+  \input{outlook.tex}
+  
+  \chapter{Appendix}
+    \listoffigures
+    \lstlistoflistings
+    \listoftables
+
+  \bibliographystyle{plain}
+  \bibliography{bibliography}
 
 \end{document}

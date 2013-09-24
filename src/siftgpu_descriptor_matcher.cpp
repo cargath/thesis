@@ -56,11 +56,11 @@ SiftGPUDescriptorMatcher* SiftGPUDescriptorMatcher::getInstance()
 }
 
 bool SiftGPUDescriptorMatcher::match(const std::vector<float>& descriptors1,
-	                                   const std::vector<float>& descriptors2,
-	                                   std::vector<cv::DMatch>& matches,
-	                                   const double dist_max,
-	                                   const double knn_1to2_ratio,
-	                                   const int mutual_best_match)
+                                     const std::vector<float>& descriptors2,
+                                     std::vector<cv::DMatch>& matches,
+                                     const double dist_max,
+                                     const double knn_1to2_ratio,
+                                     const int mutual_best_match)
 {
   matches.clear();
   //
@@ -103,11 +103,10 @@ bool SiftGPUDescriptorMatcher::match(const std::vector<float>& descriptors1,
     // 
     if(counter > 0.5 * (double) nof_matches)
     {
+      ROS_DEBUG("SiftGPU Descriptor Matcher: Matches bad due to context error.");
       ROS_DEBUG("Counter:           %i.", counter);
       ROS_DEBUG("NOF Matches:       %i.", nof_matches);
       ROS_DEBUG("0.5 * NOF Matches: %f.", 0.5 * (double) nof_matches);
-      ROS_ERROR("SiftGPU Descriptor Matcher: Matches bad due to context error.");
-      std::cout << std::endl;
       matches.clear();
       return false;
     }

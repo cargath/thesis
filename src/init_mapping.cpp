@@ -4,9 +4,11 @@
 
 // This is a ROS project
 #include <ros/ros.h>
+#include <ros/package.h>
 
 // Local headers
 #include <thesis/math3d.h>
+#include <thesis/timestring.h>
 #include <thesis/semantic_map.h>
 
 // We are working with TF
@@ -25,6 +27,9 @@
 #include <thesis/MappingGetByPosition.h>
 #include <thesis/MappingGetVisible.h>
 
+// C++ std libraries
+#include <fstream>
+
 using namespace geometry_msgs;
 
 // Config parameters
@@ -41,7 +46,8 @@ int         memory_size,
             fov_width,
             fov_height;
 
-bool        debug;
+bool        debug,
+            logging;
 
 // Transform listener
 tf::TransformListener* transform_listener;
@@ -54,6 +60,9 @@ SemanticMap semantic_map;
 
 // Time since last cleanup
 ros::Time last_cleanup;
+
+// Logfile
+std::ofstream logfile;
 
 void map_2_camera(const PoseStamped& pose_map, PoseStamped& pose_camera)
 {
@@ -182,7 +191,9 @@ bool object_callback(const thesis::ObjectInstance& input, boost::uuids::uuid& id
   transformed.type_id    = input.type_id;
   transformed.confidence = input.confidence;
   // If available, transform recognized object pose to map frame
-  if(!isnan(input.pose_stamped.pose.position))
+  if(!isnan(input.pose_stamped.pose.position) && !(input.pose_stamped.pose.position.x == 0 &&
+                                                   input.pose_stamped.pose.position.y == 0 &&
+                                                   input.pose_stamped.pose.position.z == 0))
   {
     // Compute min distance for object to be considered a new object
     float min_distance = get_shorter_side(input.type_id);
@@ -198,8 +209,27 @@ bool object_callback(const thesis::ObjectInstance& input, boost::uuids::uuid& id
       }
       // Transform object to map space
       camera_2_map(input.pose_stamped, transformed.pose_stamped);
-      // Add object to semantic map
-      return semantic_map.add(transformed, id, min_distance);
+      
+      if(!isnan(input.pose_stamped.pose.position) && !(transformed.pose_stamped.pose.position.x == 0 &&
+                                                       transformed.pose_stamped.pose.position.y == 0 &&
+                                                       transformed.pose_stamped.pose.position.z == 0))
+      {
+        // Add object to semantic map
+        return semantic_map.add(transformed, id, min_distance);
+      }
+      else
+      {
+        // Error
+        if(debug)
+        {
+          ROS_INFO("Mapping::object_callback(%s): ", input.type_id.c_str());
+          ROS_INFO("  Got bad transformed position values (at least one is NaN or 0).");
+          std::cout << std::endl;
+        }
+        // 'true' might seem weird,
+        // but it must remain consistent with SemanticMap::add()
+        return true;
+      }
     }
     else
     {
@@ -222,7 +252,7 @@ bool object_callback(const thesis::ObjectInstance& input, boost::uuids::uuid& id
     if(debug)
     {
       ROS_INFO("Mapping::object_callback(%s): ", input.type_id.c_str());
-      ROS_INFO("  Got bad object position values (at least one is NaN).");
+      ROS_INFO("  Got bad object position values (at least one is NaN or 0).");
       std::cout << std::endl;
     }
     // 'true' might seem weird,
@@ -275,6 +305,38 @@ void object_array_callback(const thesis::ObjectInstanceArray::ConstPtr& input)
       uuid_msgs::fromMsg(visible[i].uuid),
       age_threshold
     );
+  }
+  // Logging
+  if(logging && logfile.is_open())
+  {
+    // Get currently stored objects
+    std::vector<thesis::ObjectInstance> all_objects;
+    semantic_map.setCurrentPosition(get_current_camera_position());
+    semantic_map.getAll(all_objects);
+    // Log their poses
+    for(size_t i = 0; i < all_objects.size(); i++)
+    {
+      // UUID
+      logfile << all_objects[i].uuid << " ";
+      // Position
+      logfile << all_objects[i].pose_stamped.pose.position.x << " ";
+      logfile << all_objects[i].pose_stamped.pose.position.y << " ";
+      logfile << all_objects[i].pose_stamped.pose.position.z << " ";
+      // Quaternion message to TF quaternion
+      tf::Quaternion quaternion_tf;
+      tf::quaternionMsgToTF(
+        all_objects[i].pose_stamped.pose.orientation,
+        quaternion_tf
+      );
+      // Quaternion to roll, pitch & yaw
+      tf::Matrix3x3 matTemp(quaternion_tf);
+      double roll, pitch, yaw;
+      matTemp.getRPY(roll, pitch, yaw);
+      // Orientation
+      logfile << yaw   << " ";
+      logfile << pitch << " ";
+      logfile << roll  << "\n";
+    }
   }
   // Debug output
   if(debug)
@@ -344,6 +406,7 @@ int main(int argc, char** argv)
   
   // Get local parameters
   nh_private.param("debug",             debug,             false);
+  nh_private.param("logging",           logging,           false);
   nh_private.param("age_threshold",     age_threshold,     1.0);
   nh_private.param("min_confirmations", min_confirmations, 0);
   nh_private.param("fov_width",         fov_width,         90);
@@ -352,7 +415,8 @@ int main(int argc, char** argv)
   nh_private.param("fov_far",           fov_far,           5.0);
   
   ROS_INFO("Mapping (local parameters): ");
-  ROS_INFO("  Debug mode:        %s.", debug ? "true" : "false");
+  ROS_INFO("  Debug mode:        %s.", debug   ? "true" : "false");
+  ROS_INFO("  Logging:           %s.", logging ? "true" : "false");
   ROS_INFO("  Age threshold:     %f.", age_threshold);
   ROS_INFO("  Min confirmations: %i.", min_confirmations);
   ROS_INFO("  FOV width:         %i.", fov_width);
@@ -381,10 +445,50 @@ int main(int argc, char** argv)
   semantic_map = SemanticMap(memory_size, debug);
   last_cleanup = ros::Time::now();
   
+  // Open logfile
+  if(logging)
+  {
+    // Create logfile name
+    std::stringstream logpath;
+    // Path to this package
+    logpath << ros::package::getPath("thesis");
+    logpath << "/log/3D-poses_";
+    // Current time and date
+    logpath << timestring::get_timestring();
+    // File extension
+    logpath << ".log";
+    // Open file
+    logfile.open(logpath.str().c_str(), std::ofstream::out | std::ofstream::app);
+    if(logfile.is_open())
+    {
+      logfile << "# 3D poses of objects stored in the semantic map.\n";
+      logfile << "# UUID xPos yPos zPos yaw pitch roll\n";
+      // Debug output
+      ROS_INFO("Mapping: ");
+      ROS_INFO("  Successfully opened logfile '%s'.", logpath.str().c_str());
+      std::cout << std::endl;
+    }
+    else
+    {
+      ROS_INFO("Mapping: ");
+      ROS_INFO("  Unable to open logfile '%s'.", logpath.str().c_str());
+      std::cout << std::endl;
+    }
+  }
+  
   // Spin
   ros::spin();
+  
   // Free memory
   delete transform_listener;
+  
+  // Close logfile
+  if(logging && logfile.is_open())
+  {
+    logfile.flush();
+    logfile.close();
+  }
+  
   // Exit
   return 0;
 }

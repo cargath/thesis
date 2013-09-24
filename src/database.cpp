@@ -74,17 +74,19 @@ bool Database::update(const thesis::ObjectClass& input)
       database[input.type_id].values.add(input);
       return true;
     }
-    else
+    else if(debug)
     {
       ROS_WARN("Database: Do not add NaN values for '%s' to database.", input.type_id.c_str());
       return false;
     }
   }
-  else
+  else if(debug)
   {
     ROS_WARN("Database: No object '%s' found to update.", input.type_id.c_str());
     return false;
   }
+  // else
+  return false;
 }
 
 bool Database::getByID(std::string id, thesis::ObjectClass& out)

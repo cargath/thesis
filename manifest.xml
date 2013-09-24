@@ -9,6 +9,7 @@
   <url>http://ros.org/wiki/thesis</url>
 
   <depend package="roscpp"/>
+  <depend package="roslib"/>
   
   <depend package="sensor_msgs"/>
   
