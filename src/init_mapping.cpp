@@ -137,7 +137,16 @@ inline bool is_visible(geometry_msgs::Point p)
   float angle_width  = angle3f(cv::Point3f(p.x,  0.0f, p.z), cv::Point3f(0.0f, 0.0f, 1.0f)),
         angle_heigth = angle3f(cv::Point3f(0.0f, p.y,  p.z), cv::Point3f(0.0f, 0.0f, 1.0f));
   // Check if point is inside camera frustum
-  return (angle_width <= fov_width && angle_heigth <= fov_height && p.z >= fov_near && p.z <= fov_far);
+  
+  //ROS_INFO("W: %f", angle_width);
+  //ROS_INFO("H: %f", angle_heigth);
+
+  ROS_INFO("FAR:    %f, %f", p.z, fov_far);
+  ROS_INFO("NEAR:   %f, %f", p.z, fov_near);
+  ROS_INFO("WIDTH:  %f, %f", fabs(angle_width)*RAD,  fov_width/2.0f);
+  ROS_INFO("HEIGHT: %f, %f", fabs(angle_heigth)*RAD, fov_height/2.0f);
+
+  return (fabs(angle_width)*RAD <= fov_width/2.0f && fabs(angle_heigth)*RAD <= fov_height/2.0f && p.z >= fov_near && p.z <= fov_far);
 }
 
 inline float get_shorter_side(std::string type)
