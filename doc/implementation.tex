@@ -1,6 +1,6 @@
 \chapter{Implementation}
 \label{chap:impl}
-This chapter illustrates how the proposed system is realised, i.e. deals with the implementation of the processes identified in chapter~\ref{chap:arch}, their interfaces and the techniques used to achieve the required functionality. \\
+This chapter illustrates how the proposed system is realised, i.e. deals with the implementation of the processes identified in Chapter~\ref{chap:arch}, their interfaces and the techniques used to achieve the required functionality. \\
 
 It opens with a description of external frameworks employed in this work. The other sections reflect the structure of the architecture and follow an object from image in the database, through detection in a camera image, to the memory of the semantic map and eventually its visual representation on the computer screen.
 
@@ -13,17 +13,22 @@ The following frameworks will come up again and again over the course of this ch
 
 \subsection{ROS as an inter-process communication service}
 \label{sec:impl-ros}
-ROS, short for ``\textbf{R}obot \textbf{O}perating \textbf{S}ystem'', ``provides a structured communications layer above
-the host operating systems of a heterogenous compute cluster.''\cite{quigley2009ros}. ROS implements several methods for inter-process communication and is sufficient to realize the interfaces defined in chapter~\ref{chap:arch}. \\
+\begin{wrapfigure}{l}{0.33\textwidth}
+  \vspace{-10pt}
+  \centering
+  \includegraphics[width=0.31\textwidth]{images/Logo_ROS.png}
+  \vspace{-10pt}
+\end{wrapfigure}
 
-Processes created with ROS are called \textbf{Nodes}. They communicate with each other through \textit{messages} and \textit{services}. The subsystems identified in the architecture description (section~\ref{chap:arch}) are implemented as ROS nodes. \\
+ROS, short for ``\textbf{R}obot \textbf{O}perating \textbf{S}ystem'', ``provides a structured communications layer above the host operating systems of a heterogenous compute cluster.''\cite{quigley2009ros}. ROS implements several methods for inter-process communication and is sufficient to realize the interfaces defined in Chapter~\ref{chap:arch}. \\
+
+Processes created with ROS are called \textbf{Nodes}. They communicate with each other through \textit{messages} and \textit{services}. The subsystems identified in the architecture description (Section~\ref{chap:arch}) are implemented as ROS nodes. \\
 
 \textbf{Messages} can contain multiple fields of standard datatypes (e.g. \texttt{boolean}, \texttt{integer}, \texttt{float}, etc). They are used to broadcast and / or stream information to every node that might be interested. These messages are \textit{published} to a certain \textit{topic}. Other nodes can \textit{listen} to a topic, so that they will receive new information associated with it. This enables them to immediately react to messages, without needing to continuesly query a topic.
 
-ROS is able to synchronize messages. If a node wants to listen to multiple topics at once, ROS can resolve slight differences in timing and tell if messages were published simultaneously. This practice satisfies the requirement (defined in section~\ref{sec:arch-perception}) of being able to get the camera and depth images for the same moment of time.
+ROS is able to synchronize messages. If a node wants to listen to multiple topics at once, ROS can resolve slight differences in timing and tell if messages were published simultaneously. This practice satisfies the requirement (defined in Section~\ref{sec:arch-perception}) of being able to get the camera and depth images for the same moment of time.
 
-\begin{figure}[H]
-  \begin{lstlisting}[caption=An example for the use of ROS messages in this work. The database informs others about changes.]
+\begin{lstlisting}[caption=An example for the use of ROS messages in this work. The database informs others about changes.]
 /**
  * Database. The publisher.
  */
@@ -45,11 +50,9 @@ int main(int argc, char** argv) {
   update_publisher.publish(msg);
   // [...]
 }
-  \end{lstlisting}
-\end{figure}
+\end{lstlisting}
 
-\begin{figure}[H]
-  \begin{lstlisting}[caption=An example for the use of ROS messages in this work. The perception reacts to changes to the database.]
+\begin{lstlisting}[caption=An example for the use of ROS messages in this work. The perception reacts to changes to the database.]
 /**
  * Perception. The listener.
  */
@@ -72,15 +75,13 @@ int main(int argc, char** argv) {
   );
   // [...]
 }
-  \end{lstlisting}
-\end{figure}
+\end{lstlisting}
 
 Two-way communication in ROS is done via \textbf{services}, which basically consist of two messages. Nodes can \textit{advertise} services to enable others to \textit{request} information. The advertising node is \textit{called} with a request defined in one message and \textit{replies} to the caller with a second message.
 
-Services are used in this work to make the information stored in the database (section~\ref{sec:arch-db}) and semantic map (section~\ref{sec:arch-map}) available on demand.
+Services are used in this work to make the information stored in the database (Section~\ref{sec:arch-db}) and semantic map (Section~\ref{sec:arch-map}) available on demand.
 
-\begin{figure}[H]
-  \begin{lstlisting}[caption=An example for the use of ROS services in this work. The semantic map enables others to get memorized objects.]
+\begin{lstlisting}[caption=An example for the use of ROS services in this work. The semantic map enables others to get memorized objects.]
 /**
  * Semantic Map. The advertiser.
  */
@@ -96,11 +97,9 @@ int main(int argc, char** argv) {
   );
   // [...]
 }
-  \end{lstlisting}
-\end{figure}
+\end{lstlisting}
 
-\begin{figure}[H]
-  \begin{lstlisting}[caption=An example for the use of ROS services in this work. The visualisation gets all objects memorized by the semantic map.]
+\begin{lstlisting}[caption=An example for the use of ROS services in this work. The visualisation gets all objects memorized by the semantic map.]
 /**
  * Visualisation. The caller.
  */
@@ -129,23 +128,48 @@ int main(int argc, char** argv) {
   }
   // [...]
 }
-  \end{lstlisting}
-\end{figure}
+\end{lstlisting}
+
+ROS nodes can access configuration parameters stored at the \textbf{Parameter Server}. The Parameter Server supports various standard datatypes, such as \texttt{boolean}, \texttt{integer}, \texttt{float}, \texttt{string}, etc. Parameters can be defined globally, i.e. accessible by all nodes, or private, i.e. only accessible by a specific node. They can be set and retrieved in multiple ways: From within a node (i.e. via program code), with the \textit{rosparam} command-line tool, as arguments when running a node from the command-line or in \textit{.launch-files}. \\
+
+\textbf{.launch-files} are used to as launch-``scripts'', to simplify the startup of more complex ROS systems that require multiple parameters to be set or consist of multiple individual nodes. They utilize the XML-syntax and run an arbitrary number of nodes with an arbitrary number of parameters. .launch-files are used in this implementation to start the various parts of the system, Database, Perception, Semantic Map and Visualisation at once, and to configure them to run on different devices, i.e. a robot or a standalone RGB-D camera. For example, the topics that provide the camera images and depth information might differ from device to device, therefore they can be set as parameters. Then, .launch-files are created with presets for the most common devices.
 
 \subsection{OpenNI as the RGB-D camera driver}
 \label{sec:impl-openni}
-OpenNI~\cite{openni_sdk} (``\textbf{Open} \textbf{N}atural \textbf{I}nteraction'') is a non-profit organization that provides a framework for 3D sensing. It includes drivers for RGB-D cameras, like the Microsoft Kinect, that are required by the perception (see section~\ref{sec:arch-perception}) to recognize objects and calculate their 3D position. \\
+\begin{wrapfigure}{l}{0.33\textwidth}
+  \vspace{-10pt}
+  \centering
+  \includegraphics[width=0.31\textwidth]{images/Logo_OpenNI.png}
+  \vspace{-15pt}
+\end{wrapfigure}
 
-This work uses a wrapper for the OpenNI camera driver that is available for ROS (described in section~\ref{sec:impl-ros}). Once the package is started, it publishes the information perceived by the various sensors (RGB camera, laser sensor) of the device as well as a description of its characteristics (resolution, camera matrix, etc) to multiple ROS topics. For example, RGB color images are provided as well as grayscale images, each available raw from the device or rectified (without the distortion introduced by the lense of the camera). The same is true for the depth images created from the laser sensor, which are additionally available aligned to the camera images.
+OpenNI~\cite{openni_sdk} (``\textbf{Open} \textbf{N}atural \textbf{I}nteraction'') is a non-profit organization that provides a framework for 3D sensing. It includes drivers for RGB-D cameras, like the Microsoft Kinect, that are required by the perception (see Section~\ref{sec:arch-perception}) to recognize objects and calculate their 3D position. \\
+
+This work uses a wrapper for the OpenNI camera driver that is available for ROS (described in Section~\ref{sec:impl-ros}). Once the package is started, it publishes the information perceived by the various sensors (RGB camera, laser sensor) of the device as well as a description of its characteristics (resolution, camera matrix, etc) to multiple ROS topics. For example, RGB color images are provided as well as grayscale images, each available raw from the device or rectified (without the distortion introduced by the lense of the camera). The same is true for the depth images created from the laser sensor, which are additionally available aligned to the camera images.
 
 The perception requires a camera image, a depth image and the camera metadata. The specific topics can be adjusted by the user, who might not work with the defaults (depending on his device). In order to correctly recognize objects, the depth images need to be aligned with the camera images (to look up the associated depth value) and both images need to be rectified (to project pixels to 3D camera space). Note that \textit{depth registration} needs to be activated for the ROS OpenNI driver to provide these aligned images.
+
+\subsection{The OpenCV image manipulation library}
+\label{sec:impl-opencv}
+\begin{wrapfigure}{l}{0.25\textwidth}
+  \vspace{-10pt}
+  \centering
+  \includegraphics[width=0.23\textwidth]{images/Logo_OpenCV.png}
+  \vspace{-20pt}
+\end{wrapfigure}
+
+OpenCV~\cite{opencv_library} (``\textbf{Open} Source \textbf{C}omputer \textbf{Vision}'') is a library of image manipulation tools aimed at real-time computer vision development.
+
+OpenCV not only provides implementations of popular image processing algorithms for tasks like image segmentation, object recognition and 3D reconstruction, but also a broad range of mathematical datatypes and functions for calculations in 2D and 3D cartesian coordinate systems (point, vector and matrices operations, etc).
+
+Additionally, OpenCV comes with GUI tools and image editing functions, for example to draw points or lines onto existing images. The perception module uses these tools to visualize its results with debug images.
 
 
 \section{Database}
 \label{sec:impl-db}
 The database is a collection of objects that are or might become interesting to the task of a robot. The system will watch out for the objects that are defined here and memorise them for future use. \\
 
-Each entry at least has name and a sample image, i.e. a photo of the object, so the perception knows what it looks like. To create new entries to the database, other nodes (see section~\ref{sec:impl-ros}) can provide images through the interfaces defined in section~\ref{sec:arch-db}. These are realised with ROS services, where the requests contain contain the information to be added to the database, and the response is simply left empty.
+Each entry at least has name and a sample image, i.e. a photo of the object, so the perception knows what it looks like. To create new entries to the database, other nodes (see Section~\ref{sec:impl-ros}) can provide images through the interfaces defined in Section~\ref{sec:arch-db}. These are realised with ROS services, where the requests contain contain the information to be added to the database, and the response is simply left empty.
 
 The interfaces that allow other nodes to access objects in the database are implemented as ROS services as well.
 
@@ -164,9 +188,9 @@ Very small images do not contain any useful information and will not be added to
 
 \section{Perception}
 \label{sec:impl-perception}
-The perception is responsible for detecting the objects defined in the database, calculating the corresponding approximate 3D poses and dimensions and providing other nodes (see section~\ref{sec:impl-ros}) with these findings. \\
+The perception is responsible for detecting the objects defined in the database, calculating the corresponding approximate 3D poses and dimensions and providing other nodes (see Section~\ref{sec:impl-ros}) with these findings. \\
 
-To this end, it receives information from an OpenNI device (see section~\ref{sec:impl-openni}). The necessary interface defined in section~\ref{sec:arch-perception} is implemented through ROS messages: It listens to three different topics (camera images, depth images and camera characteristics) in sychronization, enabling it to relate the individual pieces to one another.
+To this end, it receives information from an OpenNI device (see Section~\ref{sec:impl-openni}). The necessary interface defined in Section~\ref{sec:arch-perception} is implemented through ROS messages: It listens to three different topics (camera images, depth images and camera characteristics) in sychronization, enabling it to relate the individual pieces to one another.
 
 It then in turn publishes its calculations (the object pose, the object dimensions and the camera pose from where the objects was detected) to three different ROS topics. Other nodes can listen to these topics individually or synchronize them, e.g. to relate an object pose to the camera pose that enabled its detection. Note that all objects recognized in one camera image are published at once, so that subscribing topics know they belong to the same frame. \\
 
@@ -174,11 +198,13 @@ This section details what happens in between these interfaces, the way from came
 
 \subsection{SIFT Feature Detection and Matching}
 \label{sec:impl-sift}
-In order to recognize objects, the perception module compares photos of them with images from the OpenNI camera (described in section~\ref{sec:impl-openni}). A pattern of pixels in the camera image that is similar to the photo of an object is evidence for the existence of such an object. Looking for the complete photo at each possible position in the camera image in each possible size and orientation would add up to a huge amount of comparisons and is therefore unfeasible. \\
+In order to recognize objects, the perception module compares photos of them with images from the OpenNI camera (described in Section~\ref{sec:impl-openni}). A pattern of pixels in the camera image that is similar to the photo of an object is evidence for the existence of such an object. Looking for the complete photo at each possible position in the camera image in each possible size and orientation would add up to a huge amount of comparisons and is therefore unfeasible. \\
 
 Instead, the perception uses the SIFT~\cite{sift_lowe} (Scale Invariant Feature Transform) method to detect and match local features in the objects photos and camera images. The basic idea behind local image features is to reduce the number of points of an image for further processing by selecting the points that hold the most information. Here it is used to intelligently select a significantly reduced number of points to match between the images up for comparison.
 
-SIFT features are invariant to translation, rotation and scaling and robust under lighting changes. This means, that objects do not need to stand perfectly upright or be illuminated brightly in order to be successfully recognized. \\
+SIFT features are invariant to translation, rotation and scaling and robust under lighting changes. This means, that objects do not need to stand perfectly upright or be illuminated brightly in order to be successfully recognized.
+
+A popular implementation of SIFT is included in OpenCV (see Section~\ref{sec:impl-opencv}).\\
 
 The process of matching two images with SIFT consists of four steps: (1) Detecting the locations of features in both images, (2) computing a set of descriptors for each of those features, (3) calculating the distance between the descriptors of each feature in one image and the descriptors of each feature in the other image and (4) matching the features of both images by utilizing these distances.
 
@@ -188,16 +214,13 @@ Similarly, computation of keypoints and their descriptors for the camera image o
 
 To determine if a feature $f$ in one image matches a feature in the other, the distance of $f$ and its nearest neighbour $f_{1st}$ should be below a threshold $t_1$. Additionally, as presented by SIFT author David G. Lowe in the succeeding paper ``Distinctive Image Features from Scale-Invariant Keypoints''~\cite{image_features_lowe}, the ratio between the distances of $f$ and its nearest neighbour $f_{1st}$ and second nearest neighbour $f_{2nd}$ in the other image can be calculated to reduce the number of false positives. If this ratio is below a threshold $t_2$, $f_{1st}$ is a match for $f$. The concept here is, that $f_{1st}$ only is a distinct, meaningful feature, if it is dissimilar to other features. \\
 
-A popular implementation of SIFT is included in OpenCV~\cite{opencv_library} (``\textbf{Open} Source \textbf{C}omputer \textbf{Vision}''), a library of image manipulation tools aimed at real-time computer vision development.
-
 Step (3), comparing the descriptors of both images, is a very expensive operation. Although step (1) significantly reduces the number of points to match, it is still of quadratic complexity. In order to speed up the matching, the perception module utilizes SiftGPU~\cite{siftgpu07wu}, a SIFT implementation for the GPU. The GPU (Graphics Processing Unit) is a processor specifically designed to execute geometrical operations and image manipulation. GPUs typically consist of multiple cores that operate in parallel, further increasing performance. \todo{reference describing GPU}
 
 One of the reasons to choose SiftGPU over other SIFT implementations for the GPU is, that its datatypes are easily interchangeable with OpenCV. This has actually been done before - the RGBD~SLAM~\cite{endres10rgbdslam} package for ROS includes a SiftGPU wrapper class that converts between SiftGPU and OpenCV. This class served as a basis for the SiftGPU wrapper classes created for this work.
 
 Note that the SiftGPU matching process includes step (3) and (4), while they have to be done seperately when using SIFT from the OpenCV libraries.
 
-\begin{figure}[H]
-  \begin{lstlisting}[caption=Example of calculating matching points between two images with the OpenCV SIFT implementation.]
+\begin{lstlisting}[caption=Example of calculating matching points between two images with the OpenCV SIFT implementation.]
 example_sift(cv::Mat& camera_img, cv::Mat& sample_img)
 {
   // Feature detection
@@ -233,14 +256,13 @@ example_sift(cv::Mat& camera_img, cv::Mat& sample_img)
     }
   }
 }
-  \end{lstlisting}
-\end{figure}
+\end{lstlisting}
 
 \subsection{Locating the 2D object position and discarding wrongly recognized objects}
 \label{sec:impl-2Dpose}
 If enough matching keypoints are found, the object can be located in the camera image. The matches can be used to approximate a projection from the sample to the camera image. This is done by finding a projection that transforms all matching keypoints from their sample image coordinates to their camera image coordinates. The more matches are found, the better the approximation. False positives on the other hand distort the result.
 
-Although matches are filtered in order to reduce the number false positives (see section~\ref{sec:impl-sift}), occasionally enough errors might come through to result in a wrongly recognized object. The perception module takes precautions to identify and discard such failures: \\
+Although matches are filtered in order to reduce the number false positives (see Section~\ref{sec:impl-sift}), occasionally enough errors might come through to result in a wrongly recognized object. The perception module takes precautions to identify and discard such failures: \\
 
 Because the scenario deals exclusively with rectangular objects, the corners of an object should form a convex quadrangle after they have been projected onto the camera image. This means that, (1) no two opposing sides of an object should intersect and (2) all four corners should be part of their convex hull. Otherwise the object can be discarded. \\
 
@@ -258,8 +280,7 @@ To check if a point $p$ is left of a line $\overline{a b}$, a determinant
 \end{equation*}
 can be calculated. If $d > 0$, then $p$ is left of $\overline{a b}$.\\
 
-\begin{figure}[H]
-  \begin{lstlisting}[caption=This C++ code example demonstrates how the Graham Scan algorithm determines the convex hull of an already sorted set of points.]
+\begin{lstlisting}[caption=This C++ code example demonstrates how the Graham Scan algorithm determines the convex hull of an already sorted set of points.]
 convex_hull.push_back(p0);
 convex_hull.push_back(nonP0[0]);
 for(size_t i = 1;
@@ -281,18 +302,17 @@ for(size_t i = 1;
     convex_hull.pop_back();
   }
 }
-  \end{lstlisting}
-\end{figure}
+\end{lstlisting}
 
 \subsection{Recognizing multiple objects of the same type by cutting successfully matched keypoints}
 \label{sec:impl-multiple}
-Matching multiple sample images against a camera image as described in section~\ref{sec:impl-sift} will successfully recognize different objects in the same frame, but often multiple objects of the same type might be visible. Due to the nature of how a supermarket is organised, in a scenario as proposed in this work objects of one type always appear in groups. Matching one object against the same camera image will always return the same set of keypoints that are the best match between both images. \\
+Matching multiple sample images against a camera image as described in Section~\ref{sec:impl-sift} will successfully recognize different objects in the same frame, but often multiple objects of the same type might be visible. Due to the nature of how a supermarket is organised, in a scenario as proposed in this work objects of one type always appear in groups. Matching one object against the same camera image will always return the same set of keypoints that are the best match between both images. \\
 
 The solution to this problem is to create a subset of keypoints and descriptors for the camera image whenever an object is successfully recognized. This subset should only contain the keypoints and descriptors that do not belong to an already recognized object. Then the currently recognized object can be matched against the resulting subset again, in order to find a second best match (if such a match exists). \\
 
-The set of keypoints associated with an object through the matching process in section~\ref{sec:impl-sift} might contain noise, i.e. keypoints that do not belong to the object that is being matched. It also might not contain all keypoints that belong the object. Thus, another approach to create the subset of keypoints that truly belong to a recognized object is needed.
+The set of keypoints associated with an object through the matching process in Section~\ref{sec:impl-sift} might contain noise, i.e. keypoints that do not belong to the object that is being matched. It also might not contain all keypoints that belong the object. Thus, another approach to create the subset of keypoints that truly belong to a recognized object is needed.
 
-After locating the object in the camera image, it is possible to determine which keypoints are located insided the convex hull of the object and which are located outside of it. First, the points that are part of the convex hull need to be determined. Then, all the remaining points that are located left of all sides of the convex hull (when traversing the convex hull counter-clockwise) lie inside of it and all other points lie outside. To this end, the techniques introduced in section~\ref{sec:impl-2Dpose} can be used.
+After locating the object in the camera image, it is possible to determine which keypoints are located insided the convex hull of the object and which are located outside of it. First, the points that are part of the convex hull need to be determined. Then, all the remaining points that are located left of all sides of the convex hull (when traversing the convex hull counter-clockwise) lie inside of it and all other points lie outside. To this end, the techniques introduced in Section~\ref{sec:impl-2Dpose} can be used.
 
 The keypoints that are located outside the convex hull of a recognized object do not belong to this object. They therefore are the ones that need to be considered when looking for the second best match. This process can be repeated until no further matches for an object are found. \\
 
@@ -300,25 +320,25 @@ Another benefit to this method is, that successfully matched keypoints do not ne
 
 \subsection{Using multiple levels of detail to reduce the initial number of features}
 \label{sec:impl-mipmap}
-As mentioned in section~\ref{sec:impl-sift}, keypoints and their descriptors for the camera image only need to be computed once per frame. This saves a few operations, but the matching process, which is of quadratic complexity and therefore the more expensive task, still needs to be done for every object in the database. In order to speed it up, the number of keypoints / descriptors that have to be compared can be reduced. \\
+As mentioned in Section~\ref{sec:impl-sift}, keypoints and their descriptors for the camera image only need to be computed once per frame. This saves a few operations, but the matching process, which is of quadratic complexity and therefore the more expensive task, still needs to be done for every object in the database. In order to speed it up, the number of keypoints / descriptors that have to be compared can be reduced. \\
 
-One way to cut down on necessary comparisons is to not consider successfully matched keypoints / descriptors when looking for further objects (already detailed in section~\ref{sec:impl-multiple}). However, this method only works if an object indeed has been successfully recognized and the benefit depends on whether this object was one of the first to be processed and how much space it takes up in the camera image (i.e. how many keypoints / descriptors can be removed). \\
+One way to cut down on necessary comparisons is to not consider successfully matched keypoints / descriptors when looking for further objects (already detailed in Section~\ref{sec:impl-multiple}). However, this method only works if an object indeed has been successfully recognized and the benefit depends on whether this object was one of the first to be processed and how much space it takes up in the camera image (i.e. how many keypoints / descriptors can be removed). \\
 
-A more effective approach is to reduce the overall number of keypoints found by the SIFT algorithm. The OpenCV SIFT implementation and SiftGPU both offer a parameter to limit the maximum amount of features. But the increase in speed comes with the drawback of inferior quality and stability, because a lower number of keypoints results in a worse approximation of the projection from image to camera coordinate space (as described in section~\ref{sec:impl-2Dpose}) or might not be enough to always detect an object all.
+A more effective approach is to reduce the overall number of keypoints found by the SIFT algorithm. The OpenCV SIFT implementation and SiftGPU both offer a parameter to limit the maximum amount of features. But the increase in speed comes with the drawback of inferior quality and stability, because a lower number of keypoints results in a worse approximation of the projection from image to camera coordinate space (as described in Section~\ref{sec:impl-2Dpose}) or might not be enough to always detect an object all.
 
 As a solution, the proposed system works with two levels of detail: First, all images are processed using only a small maximum number of keypoints. Then, if an object is successfully detected, its sample image and the camera image are matched with higher accuracy, i.e. a an increased amount of features. This way, only the objects that might actually be visible allocate the full processing power needed to locate them correctly.
 
-Furthermore, the number of keypoints needed to be matched during the second run can be decreased by calculating a rough location of the object using the result of the first run. This location can be employed as a mask, to filter the features found using the SIFT algorithm with a higher limit (the same way keypoints are filtered in section~\ref{sec:impl-multiple} to find multiple objects of the same type). Although such a mask is not perfect (otherwise a second run would not be necessary), the ratio of useful to useless keypoints actually increases, because only those in close proximity to the object get through, while the wider surrounding is ignored completely.
+Furthermore, the number of keypoints needed to be matched during the second run can be decreased by calculating a rough location of the object using the result of the first run. This location can be employed as a mask, to filter the features found using the SIFT algorithm with a higher limit (the same way keypoints are filtered in Section~\ref{sec:impl-multiple} to find multiple objects of the same type). Although such a mask is not perfect (otherwise a second run would not be necessary), the ratio of useful to useless keypoints actually increases, because only those in close proximity to the object get through, while the wider surrounding is ignored completely.
 
-A second level of detail solves the quality issue of the perceived object location introduced by using a lower number of keypoints. But, since a rough but successful detection is needed to trigger a more precise run, stability is still a problem. To prevent loosing a visible object when the first pass was unsuccessful, a rudimentary tracking is applied: The location calculated in one frame is added for further investigation in the second run of the next frame. This can be done without increasing the workload, because successfully matched keypoints are not considered during the same frame again (see section~\ref{sec:impl-multiple}). \\
+A second level of detail solves the quality issue of the perceived object location introduced by using a lower number of keypoints. But, since a rough but successful detection is needed to trigger a more precise run, stability is still a problem. To prevent loosing a visible object when the first pass was unsuccessful, a rudimentary tracking is applied: The location calculated in one frame is added for further investigation in the second run of the next frame. This can be done without increasing the workload, because successfully matched keypoints are not considered during the same frame again (see Section~\ref{sec:impl-multiple}). \\
 
 Deciding on a maximum amount of keypoints is tricky: The right balance between keeping enough information and getting rid of unnecessary work has to be found. Also, each limit works better in some situations than others, thus a fixed number is never a definitive solution. A better way to reduce how many keypoints SIFT can find is to reduce the size of the images processed in the first pass. When scaling down an image, it looses its less distinctive features (because they are not visible anymore at a smaller size) but the amount of remaining distinctive features is not capped by a hard limit. Due to SIFTs property of being scale invariant, the remaining keypoints do not decrease in utility.
 
 \subsection{Calculating the 3D pose of a recognized object}
 \label{sec:impl-3Dpose}
-Calculating the 3D pose of an object requires (1) the projection to transform points from an objects sample image to the camera coordinate space (calculated in section~\ref{sec:impl-2Dpose}), (2) the depth image for the current frame and (3) the geometric model for the camera that is being used. The depth image and the camera model both can be obtained from the OpenNI camera (see section~\ref{sec:impl-openni}. \\
+Calculating the 3D pose of an object requires (1) the projection to transform points from an objects sample image to the camera coordinate space (calculated in Section~\ref{sec:impl-2Dpose}), (2) the depth image for the current frame and (3) the geometric model for the camera that is being used. The depth image and the camera model both can be obtained from the OpenNI camera (see Section~\ref{sec:impl-openni}. \\
 
-2D image coordinates can be transformed into 3D camera space by applying the pinhole camera model (see figure~\ref{fig:pinhole-camera}) with the camera characteristics obtained via the OpenNI driver (see section~\ref{sec:impl-openni}). An implementation of the pinhole camera model comes with the \textit{image geometry} ROS (see section~\ref{sec:impl-ros}) package. But, since only two components of a 3D vector can be derived from a 2D vector, the result is a ray (not a point). The missing information can be found in the depth image. Because the images received from the OpenNI camera are depth registered, the corresponding depth value for a pixel can simply be looked up in the depth image at the identical location. Note that, due to the range limits of the laser sensor, not all pixels might have a corresponding depth value.
+2D image coordinates can be transformed into 3D camera space by applying the pinhole camera model (see figure~\ref{fig:pinhole-camera}) with the camera characteristics obtained via the OpenNI driver (see Section~\ref{sec:impl-openni}). An implementation of the pinhole camera model comes with the \textit{image geometry} ROS (see Section~\ref{sec:impl-ros}) package. But, since only two components of a 3D vector can be derived from a 2D vector, the result is a ray (not a point). The missing information can be found in the depth image. Because the images received from the OpenNI camera are depth registered, the corresponding depth value for a pixel can simply be looked up in the depth image at the identical location. Note that, due to the range limits of the laser sensor, not all pixels might have a corresponding depth value.
 
 \begin{figure}[H]
   \centering
@@ -359,35 +379,26 @@ In order to calculate the pose, consisting of its position and orientation, and 
 
 \begin{figure}[H]
   \centering
-  \begin{tikzpicture}[
-    -,
-    scale=1.8,
-    auto,
-    swap,
-    vertex/.style={
-      text centered,
-      text width=1cm,
-      minimum height=1cm,
-    },
-    edge/.style={
-      draw,
-      thick,
-      line width=1pt,
-      inner sep=3pt,
-      outer sep=3pt,
-    },
-  ]
-    % Draw the vertices.
-    \node [vertex] (a)                             {$\overrightarrow{lb}$};
-    \node [vertex] (b) [right = 1.5cm of a]        {$\overrightarrow{rb}$};
-    \node [vertex] (c) [above = 1.5cm of b]        {$\overrightarrow{rt}$};
-    \node [vertex] (d) [left  = 1.5cm of c]        {$\overrightarrow{lt}$};
-    \node [vertex] (e) [above right = 0.25cm of a] {$\overrightarrow{c}$};
-    % Database -> Semantic Map.
-    \path [edge] (a) edge [] node [] {} (b);
-    \path [edge] (b) edge [] node [] {} (c);
-    \path [edge] (c) edge [] node [] {} (d);
-    \path [edge] (d) edge [] node [] {} (a);
+  \begin{tikzpicture}
+    % grid
+    \draw [color=black!25] (0, 0) grid (12, 6);
+    %
+    \fill [color=black!25] (4, 1) rectangle (8, 5);
+    %
+    \draw [color=red, fill=red] (6, 3) circle (0.10);
+    \node at (6, 3.4) {$\overrightarrow{c}$};
+    %
+    \draw [color=red, fill=red] (4, 1) circle (0.10);
+    \node at (3.6, 0.6) {$\overrightarrow{lb}$};
+    %
+    \draw [color=red, fill=red] (8, 1) circle (0.10);
+    \node at (8.4, 0.6) {$\overrightarrow{rb}$};
+    %
+    \draw [color=red, fill=red] (4, 5) circle (0.10);
+    \node at (3.6, 5.4) {$\overrightarrow{lt}$};
+    %
+    \draw [color=red, fill=red] (8, 5) circle (0.10);
+    \node at (8.4, 5.4) {$\overrightarrow{rt}$};
   \end{tikzpicture}
   \caption{Naming scheme for notable points of an object.}
   \label{fig:image-points}
@@ -422,9 +433,9 @@ The objects \textbf{dimensions} are the magnitudes of the previously calculated 
 
 \section{Semantic Map}
 \label{sec:impl-map}
-Successfully recognized objects are stored in the semantic map, so other nodes (see section~\ref{sec:impl-ros}) can find them when needed. As described in section~\ref{sec:impl-perception}, the objects are published to a ROS topic by the perception. The semantic map subscribes to this topic and compares the received objects with those already memorised to distinguish between new additions and updates. \\
+Successfully recognized objects are stored in the semantic map, so other nodes (see Section~\ref{sec:impl-ros}) can find them when needed. As described in Section~\ref{sec:impl-perception}, the objects are published to a ROS topic by the perception. The semantic map subscribes to this topic and compares the received objects with those already memorised to distinguish between new additions and updates. \\
 
-The architecture (section~\ref{sec:arch-map}) defined multiple interfaces for the semantic map that allow other nodes access the memorized objects. These interfaces are implemented as ROS services. \\
+The architecture (Section~\ref{sec:arch-map}) defined multiple interfaces for the semantic map that allow other nodes access the memorized objects. These interfaces are implemented as ROS services. \\
 
 This section deals not only with how the semantic map adds new information to its memory, but also with how it deals with noise and cleans up objects that changed their location. Furthermore, it explains how multiple objects of one type are evaluated, to provide other nodes with the best candidate.
 
@@ -432,8 +443,7 @@ This section deals not only with how the semantic map adds new information to it
 \label{sec:impl-memo}
 3D poses published by the perception were perceived from a camera point of view. Because the camera moves, they have to be transformed to a fixed coordinate system before memorising them. The ROS package \textit{tf} is designed for this purpose: Current transformations are published to tf (e.q. by the robot running the proposed system), enabling it to resolve which one was valid at a specific point in time. Hence the tf package can be used to convert 3D poses between different coordinate system.
 
-\begin{figure}[H]
-  \begin{lstlisting}[caption=An example that shows how to use tf to transform a pose from one coordinate system to another.]
+\begin{lstlisting}[caption=An example that shows how to use tf to transform a pose from one coordinate system to another.]
 tf::TransformListener transform_listener;
 
 // Coordinate system IDs
@@ -462,12 +472,11 @@ void map_2_camera(PoseStamped& pose_map,
     pose_camera.header.stamp = ros::Time::now();
   }
 }
-  \end{lstlisting}
-\end{figure}
+\end{lstlisting}
 
 After transforming an object to the fixed coordinate system, it is compared with those already stored in the semantic map. If an object of the same type already exists at the same position (within a certain range), the system assumes, that it is the same object. In this case, the existing object is updated by combining (basically calculating an average) their poses. Otherwise the new object is added to the semantic map.
 
-As a range to determine if two object poses belong to the same object, its dimensions can be retrieved from the database (see section~\ref{sec:arch-db}). The shorter side is the minimal distance between two objects unless they collide. \\
+As a range to determine if two object poses belong to the same object, its dimensions can be retrieved from the database (see Section~\ref{sec:arch-db}). The shorter side is the minimal distance between two objects unless they collide. \\
 
 Section~\ref{sec:impl-2Dpose} dealt with precautions made to drop wrongly recognized objects. Still, some false positives might get through, but they should not end up in the semantic map. To this end, objects that are newly added need to be repeatedly recognized, otherwise they will be rejected (i.e. immediately removed again). When an object that has not yet been confirmed is updated, it gets flagged for confirmation. Every couple of seconds, a simple \textit{garbage collection} checks all memorised objects. The three cases that then may occur for each object are (1) the object has already been confirmed and is left untouched, (2) the object has been flagged for confirmation frequently enough and will be considered confirmed from now on, and (3) the object has not been flagged for confirmation frequently enough and is removed.
 
@@ -475,7 +484,7 @@ Similarly, objects can be flagged for removal, if they have already been confirm
 
 \subsection{Improving the approximation of a 3D object pose by queueing multiple instances}
 \label{sec:impl-queue}
-Section~\ref{sec:impl-memo} briefly mentioned, that recognized objects which already exist in the semantic map are updated by combining their poses. The reason for this is, that the pose calculated by the perception (as described in section~\ref{sec:impl-3Dpose}) is only an estimation that depends highly on the perspective, the matches from which the image-to-camera projection was derived, motion blur, etc. The estimation can be improved by using the calculations from multiple frames to approximate the real pose. \\
+Section~\ref{sec:impl-memo} briefly mentioned, that recognized objects which already exist in the semantic map are updated by combining their poses. The reason for this is, that the pose calculated by the perception (as described in Section~\ref{sec:impl-3Dpose}) is only an estimation that depends highly on the perspective, the matches from which the image-to-camera projection was derived, motion blur, etc. The estimation can be improved by using the calculations from multiple frames to approximate the real pose. \\
 
 Multiple poses are combined by simply calculating their average. The average cannot just be calculated every time an object is recognized and memorized instead of the existing values, because one outlier could ruin the pose forever. Therefore, the semantic map uses first-in-first-out queues to keep the most recent poses for every object, enabling it to get an average from their actual values, not an accumulation of former calculations. Additionally, the poses are weighted by a ratio $|M|/|K|$, where $|M|$ is the number of matches the pose was derived from and $|K|$ is the number of keypoints found for the objects sample image (i.e. maximum number of matches the pose could have been derived from). This ensures that poor estimations do not ruin the average. \\
 
@@ -483,7 +492,7 @@ It should be mentioned here, that the database uses the same method to calculate
 
 \subsection{Evaluating the relevance of memorized objects}
 \label{sec:impl-eval}
-The semantic map implements multiple interfaces (as described in section~\ref{sec:arch-map}) through ROS services (see section~\ref{sec:impl-ros}), to allow other nodes to access memorized objects. The system is not designed to find a specific object, but rather all objects that might be interesting in the future. It needs to be able to suggest the best candidates for a request, depending on the current situation, though. To this end, it implements an evaluation function, which prioritises objects by distance (closer objects are preferred, because they are faster reachable) and elapsed time since they were recognized (shorter periods are preferred, because it means an object is less likely to have changed its position). \\
+The semantic map implements multiple interfaces (as described in Section~\ref{sec:arch-map}) through ROS services (see Section~\ref{sec:impl-ros}), to allow other nodes to access memorized objects. The system is not designed to find a specific object, but rather all objects that might be interesting in the future. It needs to be able to suggest the best candidates for a request, depending on the current situation, though. To this end, it implements an evaluation function, which prioritises objects by distance (closer objects are preferred, because they are faster reachable) and elapsed time since they were recognized (shorter periods are preferred, because it means an object is less likely to have changed its position). \\
 
 In order to compare them, both aspects are evaluated separately and normalized in the process. The function should reflect, that recently detected objects are probably still there and that objects within a short range are located in the same section of the supermarket. It should then decline gradually and finally slowly approach $0$. Let
 \begin{equation*}

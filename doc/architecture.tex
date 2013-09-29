@@ -58,18 +58,18 @@ Since most of the subsystems depend on information from other subsystems, they n
   \begin{tikzpicture}
     \node [build] (Vis) {
       \qquad \\
-      Visualisation \\[0.5\baselineskip]
+      4 - Visualisation \\[0.5\baselineskip]
       \begin{tikzpicture}
         \node [build2] (Map) {
           \qquad \\
-          Semantic Map \\[0.5\baselineskip]
+          3 - Semantic Map \\[0.5\baselineskip]
           \begin{tikzpicture}
             \node [build3] (Rec) {
               \qquad \\
-              Perception \\[0.5\baselineskip]
+              2 - Perception \\[0.5\baselineskip]
               \begin{tikzpicture}
                 \node [build4] (DB) {
-                  Database
+                  1 - Database
                 };
               \end{tikzpicture}
             };
@@ -137,7 +137,7 @@ Whenever a new object is added to it, the database will broadcast a notification
 
 \begin{table}[H]
   \centering
-  \caption[Database add-images interface.]{Images can be provided through this interface to add new objects to the database.}
+  \caption[Database add-images interface]{Images can be provided through this interface to add new objects to the database.}
   \label{tab:db-add-images}
   \renewcommand{\arraystretch}{1.5}
   \begin{tabularx}{\textwidth}{R{0.5} L{1.5}}
@@ -152,7 +152,7 @@ Whenever a new object is added to it, the database will broadcast a notification
 
 \begin{table}[H]
   \centering
-  \caption[Database add-files interface.]{Paths to image files can be provided through this interface to add new objects to the database.}
+  \caption[Database add-files interface]{Paths to image files can be provided through this interface to add new objects to the database.}
   \label{tab:db-add-files}
   \renewcommand{\arraystretch}{1.5}
   \begin{tabularx}{\textwidth}{R{0.5} L{1.5}}
@@ -169,38 +169,32 @@ The content of the database can be accessed via an interace which just returns a
 
 \begin{table}[H]
   \centering
-  \caption[Database get-all-objects interface.]{An interface that returns all objects from the database.}
+  \caption[Database getter interfaces]{Interfaces to access the contents of the database.}
   \label{tab:db-get-all}
   \renewcommand{\arraystretch}{1.5}
-  \begin{tabularx}{\textwidth}{R{0.5} L{1.5}}
-    \hline
-    \multicolumn{2}{c}{\textbf{Get all objects}} \\
-    \hline
-    \multicolumn{2}{c}{Input} \\
-    - & - \\
-    \hline
-    \multicolumn{2}{c}{Output} \\
-    Class attributes[] & A list of all objects currently defined in the database. \\
-    \hline
-  \end{tabularx}
-\end{table}
-
-\begin{table}[H]
-  \centering
-  \caption[Database get-type interface.]{An interface that returns the class attributes of an object of a specific type.}
-  \label{tab:db-get-type}
-  \renewcommand{\arraystretch}{1.5}
-  \begin{tabularx}{\textwidth}{R{0.5} L{1.5}}
-    \hline
-    \multicolumn{2}{c}{\textbf{Get object by type}} \\
-    \hline
-    \multicolumn{2}{c}{Input} \\
-    Type name & The name of the object that is to be accessed. \\
-    \hline
-    \multicolumn{2}{c}{Output} \\
-    Class attributes & The class attributes of the object associated with the given type name. \\
-    \hline
-  \end{tabularx}
+  \begin{subtable}[t]{.495\linewidth}
+    \vspace{0pt}
+    \begin{tabularx}{\textwidth}{R{0.75} L{1.25}}
+      \hline
+      \multicolumn{2}{c}{\textbf{Get all objects}} \\
+      \hline
+      Class attributes[] (Output) & A list of all objects currently defined in the database. \\
+      \hline
+    \end{tabularx}
+  \end{subtable}%
+  \rowcolors{1}{black!6}{white}
+  \hfill
+  \begin{subtable}[t]{.495\linewidth}
+    \vspace{0pt}
+    \begin{tabularx}{\textwidth}{R{0.75} L{1.25}}
+      \hline
+      \multicolumn{2}{c}{\textbf{Get object by type}} \\
+      \hline
+      Type name (Input) & The name of the object that is to be accessed. \\
+      Class attributes (Output) & The class attributes of the object associated with the given type name. \\
+      \hline
+    \end{tabularx}
+  \end{subtable}%
 \end{table}
 
 Since the database handles them too, it listens to what dimensions the perception calculates for successfully recognized objects. It uses this data to approximate an objects real dimensions, by computing an average over multiple occurences of the object and weighting them with their corresponding confidence. Note that it is not mandatory to make use of this interface. The database does manage dimensions when provided, but simply ignores them otherwise.

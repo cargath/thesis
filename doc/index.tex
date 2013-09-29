@@ -1,16 +1,35 @@
 \documentclass{thesis}
 
 \begin{document}
-
-  \title{\textbf{Perceiving and memorising packaged goods in a supermarket environment} \vspace{7.5mm} \\ \textsc{Diploma Thesis}}
-  \author{Universit\"at Bremen \\ Fachbereich 3: Mathematik und Informatik \vspace{3.5mm} \\ Carsten K\"onemann \\ Matrikel-Nr.: 2261713}
+  \title{Perceiving and memorising packaged goods in a supermarket environment}
+  \author{Carsten K\"onemann}
   \date{08.10.2013}
+  
+  %\maketitle
+  \input{title.tex}
 
-  \maketitle
+  \pagestyle{empty}
+  \pagenumbering{gobble}
+  
+  \null\clearpage
+  
+  \input{declarations.tex}
+  
+  \null\cleardoublepage
+  \null\clearpage
 
-  \chapter*{Abstract}
+  \input{abstract.tex}
 
+  \clearpage
+  \pagestyle{plain}
+  \pagenumbering{roman}
+  
   \tableofcontents
+
+  \clearpage
+  \pagestyle{mystyle}
+  \pagenumbering{arabic}
+  \setlength{\parskip}{2mm}
 
   \input{introduction.tex}
 
@@ -20,11 +39,16 @@
 
   \input{analysis.tex}
 
-  \chapter{Discussion}
+  \input{discussion.tex}
 
-  \chapter{Conclusion}
+  \input{conclusion.tex}
 
   \input{outlook.tex}
+  
+  \renewcommand{\chaptername}{Appendix}
+  \renewcommand{\thechapter}{\Alph{chapter}}
+  \setcounter{chapter}{0}
+  \setlength{\parskip}{1mm}
   
   \chapter{Appendix}
     \listoffigures
@@ -34,4 +58,5 @@
   \bibliographystyle{plain}
   \bibliography{bibliography}
 
+  \input{installation.tex}
 \end{document}

@@ -1,0 +1,23 @@
+\chapter{Discussion}
+The goal of this work was to create a new method for a robot to find objects, a method that is faster than searching for each object as needed but more flexible than a user-maintained database of locations. Requirements such a system needs to meet in order to be useful in real-world scenarios were identified as:
+\begin{description}[leftmargin=8mm,labelindent=0mm]
+  \item[Speed] \hfill \\
+  because it continuesly needs to run in the background, while the robot is doing other things and should not allocate too much processing power needed elsewhere.
+  \item[Unobtrusiveness] \hfill \\
+  i.e. it should not interfere with other tasks / require the robot to interrupt its current task, e.g. to look at things more closely in order to successfully recognize them.
+  \item[Correctness / Reliability] \hfill \\
+  refering to robustness against false-positives, because sending the robot in the wrong direction could be even more of an issue than having to search for an object in the first place.
+\end{description}
+In Chapter~\ref{chap:analysis}, the methods incorporated to meet these requirements were described, and it was shown throught experimentation, that these methods are sufficient in the context of the implementation developed in Chapter~\ref{chap:impl} of this work.
+
+The experiment deducted in Section~\ref{sec:experiment-pr2} demonstrated how the implemented subsystems work together to achieve the goal of this work, i.e. how they form a system capable of dynamically maintaining a semantic map as a representation of objects within its environment. A robot running this system can remember objects it passes while performing other tasks, making it unnecessary to search for them, if they become relevant to a new assignment.
+
+In summary, the experiments show, that the applications developed in this work constitute a successful implementation of the proposed system. Thus they show, that such a system is a feasible solution for the problem statement defined in Chapter~\ref{chap:intro}. \\
+
+A few noteworthy aspects of the proposed system and the implementation at hand shall be discussed in the following:
+
+In order to recognize objects, the robot still needs a manually maintained database to define them, specifially their looks. But this is vastly simpler and requires a lot less user interaction and previous knowledge than having to input the location for every instance of an object. It is much more flexible, too: Not only does it not require objects to stay at predetermined positions, it is also easily transferable to new domains. Once the objects for a specific task are identified, the robot will be able to fulfill this task in new environments without the need for additional information.
+
+During camera movement, positions calculated for recognized objects are not perfectly correct, because camera images and transformations from camera to fixed coordinates cannot be acquired in synchronization. They are however good enough for the robot to find the object. Once the robot is close enough to the object to pick it up or manipulate it, the perception is able to calculate a more accurate 3D pose for it. This makes the current implementation not only sufficient for the method proposed in this work, but also for further work with the recognized objects.
+
+In the current implementation, the system only recognizes rectangular objects. This is sufficient for a proof-of-concept of the proposed method, which is not restricted to a specific type of objects. In fact, the system is implemented in a modular manner, where the perception could easily be replaced by an external application designed to recognize entirely different things.
