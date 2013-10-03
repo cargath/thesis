@@ -76,7 +76,7 @@ void map_2_camera(const PoseStamped& pose_map, PoseStamped& pose_camera)
       ros::Duration(tf_timeout)
     ))
     {
-      // Transform recognized camera pose to map frame
+      // Transform map pose to camera frame
       transform_listener->transformPose(camera_frame, pose_map, pose_camera);
       pose_camera.header.stamp = ros::Time::now();
     }
